@@ -214,11 +214,11 @@ int main(int argc, char** argv) {
 
   struct v4l2_format format;
   format.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-  format.fmt.pix.pixelformat = V4L2_PIX_FMT_JPEG;
-  format.fmt.pix.width = 640;
-  format.fmt.pix.height = 480;
-  format.fmt.pix.colorspace = V4L2_COLORSPACE_JPEG;
-  format.fmt.sdr.pixelformat = V4L2_PIX_FMT_JPEG;
+  format.fmt.pix.pixelformat = V4L2_PIX_FMT_H264;
+  format.fmt.pix.width = 320;
+  format.fmt.pix.height = 240;
+  format.fmt.pix.colorspace = V4L2_COLORSPACE_SRGB;
+  format.fmt.sdr.pixelformat = V4L2_PIX_FMT_H264;
   //format.fmt.sdr.buffersize = 640*480*3;
 
   if (ioctl(fd, VIDIOC_S_FMT, &format) < 0) {
@@ -234,15 +234,15 @@ int main(int argc, char** argv) {
     return 1;
   }
   fps.parm.capture.timeperframe.numerator = 1;
-  fps.parm.capture.timeperframe.denominator = 30;
+  fps.parm.capture.timeperframe.denominator = 15;
   if (ioctl(fd, VIDIOC_S_PARM, &fps) < 0) {
     perror("VIDIOC_S_PARM");
     return 1; 
   }
 
-  void* buffer = malloc(format.fmt.pix.sizeimage);
-  //void* buffer = nullptr;
-  //posix_memalign(&buffer, 16, format.fmt.pix.sizeimage);
+  //void* buffer = malloc(format.fmt.pix.sizeimage);
+  void* buffer = nullptr;
+  posix_memalign(&buffer, 16, format.fmt.pix.sizeimage);
   if (!buffer) {
     printf("Error requesting memory: malloc()\n");
   }
