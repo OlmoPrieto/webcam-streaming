@@ -198,32 +198,31 @@ int main(int argc, char** argv) {
   int fd = -1; // file_descriptor ?
   if ((fd = open(device, O_RDWR)) < 0) {
     perror("open");
-    return 1;
+    //return 1;
   }
 
   struct v4l2_capability cap;
   if (ioctl(fd, VIDIOC_QUERYCAP, &cap) < 0) {
     perror("VIDIOC_QUERYCAP");
-    return 1;
+    //return 1;
   }
 
   if (!(cap.capabilities & V4L2_CAP_VIDEO_CAPTURE)) {
     fprintf(stderr, "The device does not handle video capture\n");
-    return 1;
+    //return 1;
   }
 
   struct v4l2_format format;
   format.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-  format.fmt.pix.pixelformat = V4L2_PIX_FMT_H264;
-  format.fmt.pix.width = 320;
-  format.fmt.pix.height = 240;
+  format.fmt.pix.pixelformat = V4L2_PIX_FMT_RGB24;
+  format.fmt.pix.width = 640;
+  format.fmt.pix.height = 480;
   format.fmt.pix.colorspace = V4L2_COLORSPACE_SRGB;
-  format.fmt.sdr.pixelformat = V4L2_PIX_FMT_H264;
   //format.fmt.sdr.buffersize = 640*480*3;
 
   if (ioctl(fd, VIDIOC_S_FMT, &format) < 0) {
     perror("VIDIOC_S_FMT");
-    return 1;
+    //return 1;
   }
 
   struct v4l2_streamparm fps;
@@ -231,13 +230,29 @@ int main(int argc, char** argv) {
   fps.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
   if (ioctl(fd, VIDIOC_G_PARM, &fps) < 0) {
     perror("VIDIOC_G_PARM");
-    return 1;
+    //return 1;
   }
   fps.parm.capture.timeperframe.numerator = 1;
-  fps.parm.capture.timeperframe.denominator = 15;
+  fps.parm.capture.timeperframe.denominator = 30;
   if (ioctl(fd, VIDIOC_S_PARM, &fps) < 0) {
     perror("VIDIOC_S_PARM");
-    return 1; 
+    //return 1; 
+  }
+
+  struct v4l2_ext_control control;
+  control.id = V4L2_CID_EXPOSURE_AUTO;
+  control.value = V4L2_EXPOSURE_MANUAL;
+  if (ioctl(fd, VIDIOC_S_EXT_CTRLS, &control) < 0) {
+    perror("Set auto exposure");
+    //return 1;
+  }
+
+  memset(&control, 0, sizeof(control));
+  control.id = V4L2_CID_FOCUS_AUTO;
+  control.value = false;
+  if (ioctl(fd, VIDIOC_S_EXT_CTRLS, &control) < 0) {
+    perror("Setting auto focus");
+    //return 1;
   }
 
   //void* buffer = malloc(format.fmt.pix.sizeimage);
@@ -256,7 +271,7 @@ int main(int argc, char** argv) {
 
   if (ioctl(fd, VIDIOC_REQBUFS, &bufferrequest) < 0) {
     perror("VIDIOC_REQBUFS");
-    return 1;
+    //return 1;
   }
 
   struct v4l2_buffer bufferinfo;
@@ -304,6 +319,7 @@ int main(int argc, char** argv) {
   c.start();
   if (ioctl(fd, VIDIOC_QBUF, &bufferinfo) < 0) {
     printf("Error: %s\n", strerror(errno));
+    close(fd);
     return 1;
   }
   c.stop();
@@ -314,7 +330,7 @@ int main(int argc, char** argv) {
   int type = bufferinfo.type;
   if(ioctl(fd, VIDIOC_STREAMON, &type) < 0){
     perror("VIDIOC_STREAMON");
-    printf("Error: %s\n", strerror(errno));
+    close(fd);
     exit(1);
   }
   c.stop();
@@ -334,11 +350,13 @@ int main(int argc, char** argv) {
     // The buffer's waiting in the outgoing queue.
     if(ioctl(fd, VIDIOC_DQBUF, &bufferinfo) < 0){
       perror("VIDIOC_DQBUF");
+      close(fd);
       exit(1);
     }
 
     if (ioctl(fd, VIDIOC_QBUF, &bufferinfo) < 0) {
       perror("VIDIOC_QBUF");
+      close(fd);
       exit(1);
     }
     c.stop();
@@ -349,6 +367,7 @@ int main(int argc, char** argv) {
   // Deactivate streaming
   if(ioctl(fd, VIDIOC_STREAMOFF, &type) < 0){
     perror("VIDIOC_STREAMOFF");
+    close(fd);
     exit(1);
   }
 
