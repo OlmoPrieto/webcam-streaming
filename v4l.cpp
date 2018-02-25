@@ -53,91 +53,16 @@ public:
   std::chrono::high_resolution_clock::time_point m_cEnd;
 };
 
-class TCPListener {
+class Socket {
 public:
   enum class Type {
     NonBlock,
     Block,
   };
-
-  TCPListener(Type type) {
-    type = type;
-    TCPListener();
-  }
-
-  ~TCPListener() {
-    close();
-  }
-
-  bool bind(uint32_t port) {
-    address.sin_addr.s_addr = htons(INADDR_ANY);
-    address.sin_port = htons(port);
-
-    return (bool)::bind(socket_descriptor, (struct sockaddr*)&address, sizeof(address));
-  }
-
-  bool listen(uint32_t max_connections = 1) {
-    return (bool)::listen(socket_descriptor, max_connections);
-  }
-
-  uint32_t waitForConnections() {
-    uint32_t accepted_connections = 0;
-    int accepted_socket_des = accept(socket_descriptor, nullptr, nullptr);
-    while (accepted_socket_des >= 0) {
-      accepted_sockets_desc.push_back(accepted_socket_des);
-
-      accepted_socket_des = accept(socket_descriptor, nullptr, nullptr);
-    }
-
-    return accepted_connections;
-  }
-
-  // void sendData(byte* buffer, uint32_t buffer_size, uint32_t target_connection = 0) {
-  //   ::send(accepted_sockets_desc[target_connection], buffer, buffer_size, 0);
-  // }
-
-  bool close() {
-    bool success = true;
-    for (uint32_t i = 0; i < accepted_sockets_desc.size(); ++i) {
-      success = (bool)shutdown(accepted_sockets_desc[i], SHUT_RDWR);
-    }
-
-    // TODO: needed?
-    success = ::close(socket_descriptor);
-
-    return success;
-  }
-
-  bool closeConnection(uint32_t target_connection) {
-    return (bool)shutdown(accepted_sockets_desc[target_connection], SHUT_RDWR);
-  }
-
-private:
-  TCPListener() {
-    memset(&address, 0, sizeof(address));
-    address.sin_family = AF_INET;
-
-    // Should put this in an init() method
-    socket_descriptor = socket(address.sin_family, SOCK_STREAM, 0);
-    setsockopt(socket_descriptor, SOL_SOCKET, SO_REUSEADDR, (int*)1, sizeof(int32_t));  // CAREFUL: this violates TCP/IP protocol making it unlikely but possible for the next program that binds on that port to pick up packets intended for the original program
-    int32_t flags = type == Type::NonBlock ? 0 : O_NONBLOCK;
-    fcntl(socket_descriptor, F_SETFL, flags);
-  }
-
-  std::vector<int32_t> accepted_sockets_desc;
-  struct sockaddr_in address;
-  Type type;
-  int32_t socket_descriptor;
 };
 
-
-class TCPSocket {
+class TCPSocket : public Socket {
 public:
-  enum class Type {
-    NonBlock,
-    Block,
-  };
-
   TCPSocket(Type type) {
     type = type;
     TCPSocket();
@@ -169,6 +94,16 @@ public:
   }
 
 private:
+  friend class TCPListener;
+  
+  TCPSocket(uint32_t descriptor, Type type) {
+    socket_descriptor = descriptor;
+
+    setsockopt(socket_descriptor, SOL_SOCKET, SO_REUSEADDR, (int*)1, sizeof(int32_t));  // CAREFUL: this violates TCP/IP protocol making it unlikely but possible for the next program that binds on that port to pick up packets intended for the original program
+    int32_t flags = type == Type::NonBlock ? 0 : O_NONBLOCK;
+    fcntl(socket_descriptor, F_SETFL, flags);
+  }
+
   TCPSocket() {
     memset(&address, 0, sizeof(address));
     address.sin_family = AF_INET;
@@ -185,10 +120,109 @@ private:
   int32_t socket_descriptor;
 };
 
+class TCPListener : public Socket {
+public:
+  TCPListener(Type type) {
+    type = type;
+    TCPListener();
+  }
+
+  ~TCPListener() {
+    close();
+  }
+
+  bool bind(uint32_t port) {
+    address.sin_addr.s_addr = htons(INADDR_ANY);
+    address.sin_port = htons(port);
+
+    return (bool)::bind(socket_descriptor, (struct sockaddr*)&address, sizeof(address));
+  }
+
+  bool listen(uint32_t max_connections = 1) {
+    return (bool)::listen(socket_descriptor, max_connections);
+  }
+  
+  // Returns how many connections have been accepted
+  uint32_t waitForConnections() {
+    uint32_t accepted_connections = 0;
+    int accepted_socket_des = accept(socket_descriptor, nullptr, nullptr);
+    while (accepted_socket_des >= 0) {
+      accepted_sockets_desc.push_back(accepted_socket_des);
+
+      accepted_socket_des = accept(socket_descriptor, nullptr, nullptr);
+      accepted_sockets.emplace_back(TCPSocket(accepted_socket_des, type));
+    }
+
+    return accepted_connections;
+  }
+
+  uint32_t getReadySocketsCount() {
+    return accepted_sockets.size();
+  }
+
+  TCPSocket getSocket(uint32_t index) {
+    return accepted_sockets[index];
+  }
+
+  bool close() {
+    bool success = true;
+    for (uint32_t i = 0; i < accepted_sockets_desc.size(); ++i) {
+      success = (bool)shutdown(accepted_sockets_desc[i], SHUT_RDWR);
+    }
+
+    // TODO: needed?
+    success = ::close(socket_descriptor);
+
+    return success;
+  }
+
+  bool closeConnection(uint32_t target_connection) {
+    return (bool)shutdown(accepted_sockets_desc[target_connection], SHUT_RDWR);
+  }
+
+private:
+  TCPListener() {
+    memset(&address, 0, sizeof(address));
+    address.sin_family = AF_INET;
+
+    // Should put this in an init() method
+    socket_descriptor = socket(address.sin_family, SOCK_STREAM, 0);
+    setsockopt(socket_descriptor, SOL_SOCKET, SO_REUSEADDR, (int*)1, sizeof(int32_t));  // CAREFUL: this violates TCP/IP protocol making it unlikely but possible for the next program that binds on that port to pick up packets intended for the original program
+    int32_t flags = type == Type::NonBlock ? 0 : O_NONBLOCK;
+    fcntl(socket_descriptor, F_SETFL, flags);
+  }
+
+  std::vector<int32_t> accepted_sockets_desc;
+  std::vector<TCPSocket> accepted_sockets;
+  struct sockaddr_in address;
+  Type type;
+  int32_t socket_descriptor;
+};
+
+
+
+void ProcessImage(byte* src_image, unsigned int src_size, 
+  byte* dst_image, unsigned int dst_size, byte* out_data, unsigned int offset) {
+  assert(src_size == dst_size && "src image size differs from dst image size");
+  assert(offset < src_size && "offset out of bounds");
+
+  unsigned int count = 0;
+  byte* src_ptr = src_image;
+  byte* dst_ptr = dst_image;
+  for (unsigned int i = offset; i < src_size; ++i) {
+    if (*src_ptr != *dst_ptr) {
+      ++count;
+    }
+  }
+
+  printf("Pixels that differ: %u\n", count);
+}
 
 int main(int argc, char** argv) {
 
-  TCPListener listener(TCPListener::Type::NonBlock);
+  TCPListener listener(Socket::Type::NonBlock);
+  listener.bind(14194);
+  listener.listen();
 
   Chrono c;
   c.start();
@@ -255,12 +289,21 @@ int main(int argc, char** argv) {
     //return 1;
   }
 
-  //void* buffer = malloc(format.fmt.pix.sizeimage);
-  void* buffer = nullptr;
-  posix_memalign(&buffer, 16, format.fmt.pix.sizeimage);
+  byte* buffer = (byte*)malloc(format.fmt.pix.sizeimage);
+  //void* buffer = nullptr;
+  //posix_memalign(&buffer, 16, format.fmt.pix.sizeimage);
   if (!buffer) {
     printf("Error requesting memory: malloc()\n");
   }
+
+  byte* buffers[3] = {
+    (byte*)malloc(format.fmt.pix.sizeimage),
+    (byte*)malloc(format.fmt.pix.sizeimage),
+    (byte*)malloc(format.fmt.pix.sizeimage)
+  };
+  byte* read_ptr = buffers[0];
+  byte* process_ptr = buffers[1];
+  byte* send_ptr = buffers[2];
 
   struct v4l2_requestbuffers bufferrequest;
   memset(&bufferrequest, 0, sizeof(bufferrequest));
@@ -281,40 +324,21 @@ int main(int argc, char** argv) {
   //bufferinfo.memory = V4L2_MEMORY_MMAP;
   bufferinfo.memory = V4L2_MEMORY_USERPTR;
   bufferinfo.index = 0;
-  bufferinfo.m.userptr = (unsigned long)buffer;
+  bufferinfo.m.userptr = (unsigned long)read_ptr;
   bufferinfo.length = format.fmt.pix.sizeimage;
 
-  // TODO: maybe it is needed to allocate a second buffer in the same way?
+  // //void* buffer_start = mmap(NULL, bufferinfo.length, PROT_READ | PROT_WRITE,
+  // //  MAP_SHARED, fd, bufferinfo.m.offset);
+  // void* buffer_start = nullptr;
 
-  // DAMN IIIIIIITTTTTT!!!!!
-  // if (ioctl(fd, VIDIOC_QUERYBUF, &bufferinfo) < 0) {
-  //   perror("VIDIOC_QUERYBUF");
-  //   return 1;
+  // if (buffer_start == MAP_FAILED) {
+  //   //perror("mmap");
+  //   //return 1;
   // }
-  // NOTE: this call made USERPTR to malfunction, surely because it set some flag that made DQBUF to fail. GOD DAMN IT
-  // DAMN IIIIIIITTTTTT!!!!!
-
-  //void* buffer_start = mmap(NULL, bufferinfo.length, PROT_READ | PROT_WRITE,
-  //  MAP_SHARED, fd, bufferinfo.m.offset);
-  void* buffer_start = nullptr;
-
-  if (buffer_start == MAP_FAILED) {
-    //perror("mmap");
-    //return 1;
-  }
-
-  //memset(buffer_start, 0, bufferinfo.length);
+  // //memset(buffer_start, 0, bufferinfo.length);
 
   c.stop();
   printf("Time to init: %.2fms\n", c.timeAsMilliseconds());
-
-  //
-  //struct v4l2_buffer bufferinfo2;
-  //memset(&bufferinfo2, 0, sizeof(bufferinfo2));
-   
-  //bufferinfo2.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-  //bufferinfo2.memory = V4L2_MEMORY_USERPTR;
-  //bufferinfo2.index = 0; /* Queueing buffer index 0. */
   
   c.start();
   if (ioctl(fd, VIDIOC_QBUF, &bufferinfo) < 0) {
@@ -337,16 +361,15 @@ int main(int argc, char** argv) {
   printf("Time to enable streaming: %.2fms\n", c.timeAsMilliseconds());
    
   /* MAIN LOOP */
-  struct v4l2_buffer bufferinfo2;
+  unsigned int read_index = 0;
+  unsigned int process_index = 1;
+  unsigned int send_index = 2;
+  unsigned int index = 0;
   for (int i = 0; i < 50; ++i) {
     c.start();
-    // memset(&bufferinfo, 0, sizeof(bufferinfo));
-    // bufferinfo.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-    // //bufferinfo2.memory = V4L2_MEMORY_MMAP;
-    // bufferinfo.memory = V4L2_MEMORY_USERPTR;
-    // bufferinfo.index = 0; 
-    // bufferinfo2.m.userptr = (unsigned long)buffer;
-    // bufferinfo.length = format.fmt.pix.sizeimage;
+
+    bufferinfo.m.userptr = (unsigned long)read_ptr;
+
     // The buffer's waiting in the outgoing queue.
     if(ioctl(fd, VIDIOC_DQBUF, &bufferinfo) < 0){
       perror("VIDIOC_DQBUF");
@@ -361,6 +384,22 @@ int main(int argc, char** argv) {
     }
     c.stop();
     printf("Time to get frame: %.2fms\n", c.timeAsMilliseconds());
+
+    // std::thread(ProcessImage, read_ptr, format.fmt.pix.sizeimage, 
+    //   process_ptr, format.fmt.pix.sizeimage, nullptr, 0);
+    std::thread process_image_thread(
+      [=]() {
+        ProcessImage(read_ptr, format.fmt.pix.sizeimage, 
+          process_ptr, format.fmt.pix.sizeimage, nullptr, 0);
+      }
+    );
+    // std::thread(SendData, )
+
+    //read_ptr = buffers[read_index++ % 3];
+    read_ptr = buffers[index % 3];
+    process_ptr = buffers[index + 1 % 3];
+    send_ptr = buffers[index + 2 % 3];
+    ++index;
   }
   /* \MAIN LOOP */
    
@@ -387,6 +426,10 @@ int main(int argc, char** argv) {
   close(fd);
 
   free(buffer);
+
+  free(buffers[0]);
+  free(buffers[1]);
+  free(buffers[2]);
 
   return 0;
 }
