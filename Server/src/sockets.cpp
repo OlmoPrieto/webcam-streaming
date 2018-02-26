@@ -28,6 +28,10 @@ void TCPSocket::sendData(byte* buffer, uint32_t buffer_size) {
   ::send(socket_descriptor, buffer, buffer_size, 0);
 }
 
+uint32_t TCPSocket::receiveData(byte* buffer, uint32_t max_size_to_read) {
+  return recv(socket_descriptor, buffer, max_size_to_read, 0);
+}
+
 bool TCPSocket::close() {
   return (bool)::close(socket_descriptor);
 }

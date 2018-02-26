@@ -2,6 +2,7 @@
 #include <cstring>
 
 #include "chrono.h"
+#include "sockets.h"
 
 #ifdef __PLATFORM_MACOSX__
   #include <OpenGL/gl3.h>
@@ -151,6 +152,20 @@ bool CheckGLError(const char* tag = "") {
 }
 
 int main() {
+  TCPSocket socket(Socket::Type::Block);
+  socket.bind(14194);
+  socket.connect("127.0.0.1");
+  byte* data = (byte*)malloc(600000);
+  memset(data, 1, 600000);
+  socket.sendData(data, 600000);
+
+  //uint32_t read = socket.receiveData(data, sizeof(data));
+  socket.close();
+
+  return 0;
+}
+
+int _main_() {
 
   if (!glfwInit()) {
     printf("Failed to initialize GLFW\n");
