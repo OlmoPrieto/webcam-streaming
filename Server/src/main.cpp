@@ -1,5 +1,6 @@
 #include <iostream>
 #include <cstring>
+#include <cerrno>
 
 #include "sockets.h"
 
@@ -7,23 +8,20 @@
 // unify in a Base project with only include and src folders
 
 int main() {
-  TCPListener listener(Socket::Type::NonBlock);
-  printf("Created listener\n");
+  TCPListener listener(Socket::Type::Block, 128);
   listener.bind(14194);
-  printf("Listener bound\n");
   listener.listen();
-  printf("Listener listening\n");
   TCPSocket* socket = nullptr;
   while (!socket) {
-    printf("WJGHKJASGH\n");
     socket = listener.accept();
   }
   printf("Accepted connection\n");
 
   byte* data = (byte*)malloc(600000);
-  uint32_t read = socket->receiveData(data, sizeof(data));
+  int32_t read = socket->receiveData(data, sizeof(data));
   if (read > 0) {
     printf("Data received\n");
+    printf("data[1] = %u\n", data[1]);
   }
 
   socket->close();

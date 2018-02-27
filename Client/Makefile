@@ -47,7 +47,7 @@ ifeq ($(config),debug)
   TARGETDIR           = bin
   TARGET              = $(TARGETDIR)/Client
   DEFINES            += -D__PLATFORM_MACOSX__ -D_GLFW_COCOA -D_GLFW_NSGL -D_GLFW_USE_OPENGL -DDEBUG
-  INCLUDES           += -I"include" -I"dependencies" -I"dependencies/glew/include" -I"dependencies/GLFW/deps"
+  INCLUDES           += -I"include" -I"dependencies" -I"dependencies/glew/include" -I"dependencies/GLFW/deps" -I"../common/include"
   ALL_CPPFLAGS       += $(CPPFLAGS) -MMD -MP -MP $(DEFINES) $(INCLUDES)
   ALL_ASMFLAGS       += $(ASMFLAGS) $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -g -Wall -Wextra
   ALL_CFLAGS         += $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -g -Wall -Wextra
@@ -61,6 +61,7 @@ ifeq ($(config),debug)
   EXTERNAL_LIBS      +=
   LINKCMD             = $(CXX) -o $(TARGET) $(OBJECTS) $(RESOURCES) $(ARCH) $(ALL_LDFLAGS) $(LIBS)
   OBJECTS := \
+	$(OBJDIR)/common/src/sockets.o \
 	$(OBJDIR)/dependencies/GLFW/src/cocoa_init.o \
 	$(OBJDIR)/dependencies/GLFW/src/cocoa_monitor.o \
 	$(OBJDIR)/dependencies/GLFW/src/cocoa_window.o \
@@ -75,7 +76,6 @@ ifeq ($(config),debug)
 	$(OBJDIR)/dependencies/GLFW/src/window.o \
 	$(OBJDIR)/dependencies/glew/include/glew.o \
 	$(OBJDIR)/src/main.o \
-	$(OBJDIR)/src/sockets.o \
 
   define PREBUILDCMDS
   endef
@@ -90,7 +90,7 @@ ifeq ($(config),release)
   TARGETDIR           = bin
   TARGET              = $(TARGETDIR)/Client
   DEFINES            += -D__PLATFORM_MACOSX__ -D_GLFW_COCOA -D_GLFW_NSGL -D_GLFW_USE_OPENGL -DNDEBUG
-  INCLUDES           += -I"include" -I"dependencies" -I"dependencies/glew/include" -I"dependencies/GLFW/deps"
+  INCLUDES           += -I"include" -I"dependencies" -I"dependencies/glew/include" -I"dependencies/GLFW/deps" -I"../common/include"
   ALL_CPPFLAGS       += $(CPPFLAGS) -MMD -MP -MP $(DEFINES) $(INCLUDES)
   ALL_ASMFLAGS       += $(ASMFLAGS) $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -O2 -Wall -Wextra
   ALL_CFLAGS         += $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -O2 -Wall -Wextra
@@ -104,6 +104,7 @@ ifeq ($(config),release)
   EXTERNAL_LIBS      +=
   LINKCMD             = $(CXX) -o $(TARGET) $(OBJECTS) $(RESOURCES) $(ARCH) $(ALL_LDFLAGS) $(LIBS)
   OBJECTS := \
+	$(OBJDIR)/common/src/sockets.o \
 	$(OBJDIR)/dependencies/GLFW/src/cocoa_init.o \
 	$(OBJDIR)/dependencies/GLFW/src/cocoa_monitor.o \
 	$(OBJDIR)/dependencies/GLFW/src/cocoa_window.o \
@@ -118,7 +119,6 @@ ifeq ($(config),release)
 	$(OBJDIR)/dependencies/GLFW/src/window.o \
 	$(OBJDIR)/dependencies/glew/include/glew.o \
 	$(OBJDIR)/src/main.o \
-	$(OBJDIR)/src/sockets.o \
 
   define PREBUILDCMDS
   endef
@@ -133,7 +133,7 @@ ifeq ($(config),debug64)
   TARGETDIR           = bin
   TARGET              = $(TARGETDIR)/Client
   DEFINES            += -D__PLATFORM_MACOSX__ -D_GLFW_COCOA -D_GLFW_NSGL -D_GLFW_USE_OPENGL -DDEBUG
-  INCLUDES           += -I"include" -I"dependencies" -I"dependencies/glew/include" -I"dependencies/GLFW/deps"
+  INCLUDES           += -I"include" -I"dependencies" -I"dependencies/glew/include" -I"dependencies/GLFW/deps" -I"../common/include"
   ALL_CPPFLAGS       += $(CPPFLAGS) -MMD -MP -MP $(DEFINES) $(INCLUDES)
   ALL_ASMFLAGS       += $(ASMFLAGS) $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -g -Wall -Wextra -m64
   ALL_CFLAGS         += $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -g -Wall -Wextra -m64
@@ -147,6 +147,7 @@ ifeq ($(config),debug64)
   EXTERNAL_LIBS      +=
   LINKCMD             = $(CXX) -o $(TARGET) $(OBJECTS) $(RESOURCES) $(ARCH) $(ALL_LDFLAGS) $(LIBS)
   OBJECTS := \
+	$(OBJDIR)/common/src/sockets.o \
 	$(OBJDIR)/dependencies/GLFW/src/cocoa_init.o \
 	$(OBJDIR)/dependencies/GLFW/src/cocoa_monitor.o \
 	$(OBJDIR)/dependencies/GLFW/src/cocoa_window.o \
@@ -161,7 +162,6 @@ ifeq ($(config),debug64)
 	$(OBJDIR)/dependencies/GLFW/src/window.o \
 	$(OBJDIR)/dependencies/glew/include/glew.o \
 	$(OBJDIR)/src/main.o \
-	$(OBJDIR)/src/sockets.o \
 
   define PREBUILDCMDS
   endef
@@ -176,7 +176,7 @@ ifeq ($(config),release64)
   TARGETDIR           = bin
   TARGET              = $(TARGETDIR)/Client
   DEFINES            += -D__PLATFORM_MACOSX__ -D_GLFW_COCOA -D_GLFW_NSGL -D_GLFW_USE_OPENGL -DNDEBUG
-  INCLUDES           += -I"include" -I"dependencies" -I"dependencies/glew/include" -I"dependencies/GLFW/deps"
+  INCLUDES           += -I"include" -I"dependencies" -I"dependencies/glew/include" -I"dependencies/GLFW/deps" -I"../common/include"
   ALL_CPPFLAGS       += $(CPPFLAGS) -MMD -MP -MP $(DEFINES) $(INCLUDES)
   ALL_ASMFLAGS       += $(ASMFLAGS) $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -O2 -Wall -Wextra -m64
   ALL_CFLAGS         += $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -O2 -Wall -Wextra -m64
@@ -190,6 +190,7 @@ ifeq ($(config),release64)
   EXTERNAL_LIBS      +=
   LINKCMD             = $(CXX) -o $(TARGET) $(OBJECTS) $(RESOURCES) $(ARCH) $(ALL_LDFLAGS) $(LIBS)
   OBJECTS := \
+	$(OBJDIR)/common/src/sockets.o \
 	$(OBJDIR)/dependencies/GLFW/src/cocoa_init.o \
 	$(OBJDIR)/dependencies/GLFW/src/cocoa_monitor.o \
 	$(OBJDIR)/dependencies/GLFW/src/cocoa_window.o \
@@ -204,7 +205,6 @@ ifeq ($(config),release64)
 	$(OBJDIR)/dependencies/GLFW/src/window.o \
 	$(OBJDIR)/dependencies/glew/include/glew.o \
 	$(OBJDIR)/src/main.o \
-	$(OBJDIR)/src/sockets.o \
 
   define PREBUILDCMDS
   endef
@@ -219,7 +219,7 @@ ifeq ($(config),debug32)
   TARGETDIR           = bin
   TARGET              = $(TARGETDIR)/Client
   DEFINES            += -D__PLATFORM_MACOSX__ -D_GLFW_COCOA -D_GLFW_NSGL -D_GLFW_USE_OPENGL -DDEBUG
-  INCLUDES           += -I"include" -I"dependencies" -I"dependencies/glew/include" -I"dependencies/GLFW/deps"
+  INCLUDES           += -I"include" -I"dependencies" -I"dependencies/glew/include" -I"dependencies/GLFW/deps" -I"../common/include"
   ALL_CPPFLAGS       += $(CPPFLAGS) -MMD -MP -MP $(DEFINES) $(INCLUDES)
   ALL_ASMFLAGS       += $(ASMFLAGS) $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -g -Wall -Wextra -m32
   ALL_CFLAGS         += $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -g -Wall -Wextra -m32
@@ -233,6 +233,7 @@ ifeq ($(config),debug32)
   EXTERNAL_LIBS      +=
   LINKCMD             = $(CXX) -o $(TARGET) $(OBJECTS) $(RESOURCES) $(ARCH) $(ALL_LDFLAGS) $(LIBS)
   OBJECTS := \
+	$(OBJDIR)/common/src/sockets.o \
 	$(OBJDIR)/dependencies/GLFW/src/cocoa_init.o \
 	$(OBJDIR)/dependencies/GLFW/src/cocoa_monitor.o \
 	$(OBJDIR)/dependencies/GLFW/src/cocoa_window.o \
@@ -247,7 +248,6 @@ ifeq ($(config),debug32)
 	$(OBJDIR)/dependencies/GLFW/src/window.o \
 	$(OBJDIR)/dependencies/glew/include/glew.o \
 	$(OBJDIR)/src/main.o \
-	$(OBJDIR)/src/sockets.o \
 
   define PREBUILDCMDS
   endef
@@ -262,7 +262,7 @@ ifeq ($(config),release32)
   TARGETDIR           = bin
   TARGET              = $(TARGETDIR)/Client
   DEFINES            += -D__PLATFORM_MACOSX__ -D_GLFW_COCOA -D_GLFW_NSGL -D_GLFW_USE_OPENGL -DNDEBUG
-  INCLUDES           += -I"include" -I"dependencies" -I"dependencies/glew/include" -I"dependencies/GLFW/deps"
+  INCLUDES           += -I"include" -I"dependencies" -I"dependencies/glew/include" -I"dependencies/GLFW/deps" -I"../common/include"
   ALL_CPPFLAGS       += $(CPPFLAGS) -MMD -MP -MP $(DEFINES) $(INCLUDES)
   ALL_ASMFLAGS       += $(ASMFLAGS) $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -O2 -Wall -Wextra -m32
   ALL_CFLAGS         += $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -O2 -Wall -Wextra -m32
@@ -276,6 +276,7 @@ ifeq ($(config),release32)
   EXTERNAL_LIBS      +=
   LINKCMD             = $(CXX) -o $(TARGET) $(OBJECTS) $(RESOURCES) $(ARCH) $(ALL_LDFLAGS) $(LIBS)
   OBJECTS := \
+	$(OBJDIR)/common/src/sockets.o \
 	$(OBJDIR)/dependencies/GLFW/src/cocoa_init.o \
 	$(OBJDIR)/dependencies/GLFW/src/cocoa_monitor.o \
 	$(OBJDIR)/dependencies/GLFW/src/cocoa_window.o \
@@ -290,7 +291,6 @@ ifeq ($(config),release32)
 	$(OBJDIR)/dependencies/GLFW/src/window.o \
 	$(OBJDIR)/dependencies/glew/include/glew.o \
 	$(OBJDIR)/src/main.o \
-	$(OBJDIR)/src/sockets.o \
 
   define PREBUILDCMDS
   endef
@@ -302,6 +302,7 @@ endif
 
 OBJDIRS := \
 	$(OBJDIR) \
+	$(OBJDIR)/common/src \
 	$(OBJDIR)/dependencies/GLFW/src \
 	$(OBJDIR)/dependencies/glew/include \
 	$(OBJDIR)/src \
@@ -351,6 +352,10 @@ $(GCH_OBJC): $(PCH) $(MAKEFILE) | $(OBJDIR)
 	@echo $(notdir $<)
 	$(SILENT) $(CXX) $(ALL_OBJCPPFLAGS) -x objective-c++-header $(DEFINES) $(INCLUDES) -o "$@" -c "$<"
 endif
+
+$(OBJDIR)/common/src/sockets.o: ../common/src/sockets.cpp $(GCH) $(MAKEFILE)
+	@echo $(notdir $<)
+	$(SILENT) $(CXX) $(ALL_CXXFLAGS) $(FORCE_INCLUDE) -o "$@" -c "$<"
 
 $(OBJDIR)/dependencies/GLFW/src/cocoa_init.o: dependencies/GLFW/src/cocoa_init.m $(GCH_OBJC) $(MAKEFILE)
 	@echo $(notdir $<)
@@ -433,10 +438,6 @@ $(OBJDIR)/dependencies/glew/include/glew.o: dependencies/glew/include/glew.c $(G
 	$(SILENT) $(CC) $(ALL_CFLAGS) $(FORCE_INCLUDE) -o "$@" -c "$<"
 
 $(OBJDIR)/src/main.o: src/main.cpp $(GCH) $(MAKEFILE)
-	@echo $(notdir $<)
-	$(SILENT) $(CXX) $(ALL_CXXFLAGS) $(FORCE_INCLUDE) -o "$@" -c "$<"
-
-$(OBJDIR)/src/sockets.o: src/sockets.cpp $(GCH) $(MAKEFILE)
 	@echo $(notdir $<)
 	$(SILENT) $(CXX) $(ALL_CXXFLAGS) $(FORCE_INCLUDE) -o "$@" -c "$<"
 

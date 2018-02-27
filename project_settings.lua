@@ -24,6 +24,7 @@ solution "webcam-streaming"
       "./Client/dependencies",
       "./Client/dependencies/glew/include/",
       "./Client/dependencies/GLFW/deps/",
+      "./common/include/"
     }
       
     -- INCLUDE FILES
@@ -32,7 +33,7 @@ solution "webcam-streaming"
     }
     
     files{ group = "include", "./Client/include/**.h" } -- include filter and get the files
-    files{ group = "src", "./Client/src/**.cc", "./Client/src/**.cpp" } -- src filter and get the files
+    files{ group = "src", "./Client/src/**.cc", "./Client/src/**.cpp", "./common/src/**.cpp" } -- src filter and get the files
     
     -- only when compiling as library
     --defines { "GLEW_STATIC" }
@@ -132,11 +133,12 @@ solution "webcam-streaming"
     buildoptions_objcpp("-std=c++11")
       
     includedirs { 
-      "./Server/include", 
+      "./Server/include/",
+      "./common/include/"
     }
     
     files{ group = "include", "./Server/include/**.h" } -- include filter and get the files
-    files{ group = "src", "./Server/src/**.cc", "./Server/src/**.cpp" } -- src filter and get the files
+    files{ group = "src", "./Server/src/**.cc", "./Server/src/**.cpp", "./common/src/**.cpp" } -- src filter and get the files
        
     configuration { "macosx" }
       defines { "__PLATFORM_MACOSX__" }
