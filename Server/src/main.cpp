@@ -8,7 +8,7 @@
 // unify in a Base project with only include and src folders
 
 int main() {
-  TCPListener listener(Socket::Type::Block, 128);
+  TCPListener listener(Socket::Type::NonBlock, 128);
   listener.bind(14194);
   listener.listen();
   TCPSocket* socket = nullptr;

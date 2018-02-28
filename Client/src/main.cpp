@@ -152,11 +152,10 @@ bool CheckGLError(const char* tag = "") {
 }
 
 int main() {
-  TCPSocket socket(Socket::Type::Block);
-  socket.bind(14194);
+  TCPSocket socket(Socket::Type::NonBlock);
   bool success = false;
   while (!success) {
-    success = socket.connect("127.0.0.1");
+    success = socket.connect("127.0.0.1", 14194);
     //printf("Trying to connect...\n");
   }
   byte* data = (byte*)malloc(600000);
