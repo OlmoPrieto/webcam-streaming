@@ -34,7 +34,7 @@ public:
   TCPSocket(Type type);
   ~TCPSocket();
 
-  bool bind(uint32_t port);
+  //bool bind(uint32_t port);
   bool connect(const char* ip, uint32_t port);
   void sendData(byte* buffer, uint32_t buffer_size);
   uint32_t receiveData(byte* buffer, uint32_t max_size_to_read);
