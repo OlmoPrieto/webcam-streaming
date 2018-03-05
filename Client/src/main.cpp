@@ -152,16 +152,20 @@ bool CheckGLError(const char* tag = "") {
 }
 
 int main() {
-  TCPSocket socket(Socket::Type::Block);
+  TCPSocket socket(Socket::Type::NonBlock);
   bool success = false;
   while (!success) {
     success = socket.connect("127.0.0.1", 14194);
     //printf("Trying to connect...\n");
   }
-  byte* data = (byte*)malloc(600000);
-  memset(data, 2, 600000);
-  socket.sendData(data, 600000);
+  uint32_t buffer_size = 128;
+  byte* data = (byte*)malloc(buffer_size);
+  memset(data, 2, buffer_size);
+  socket.sendData(data, buffer_size);
 
+  // while (true) {
+
+  // }
   printf("Data sent\n");
   socket.close();
 

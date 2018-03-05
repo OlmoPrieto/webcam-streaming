@@ -31,6 +31,11 @@ public:
     Ready
   };
 
+  enum class ReceivingStatus {
+    CanReceive,
+    Receiving
+  };
+
   TCPSocket(Type type);
   ~TCPSocket();
 
@@ -52,6 +57,7 @@ private:
   Type type;
   int32_t socket_descriptor;
   ConnectionStatus connection_status;
+  ReceivingStatus receiving_status;
 };
 
 
