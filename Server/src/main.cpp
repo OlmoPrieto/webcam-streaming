@@ -44,7 +44,6 @@ int main() {
   // while (true) {
 
   // }
-  socket->close();
 
   c.stop();
   acc_time += c.timeAsMilliseconds();

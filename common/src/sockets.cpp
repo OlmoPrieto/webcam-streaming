@@ -3,7 +3,7 @@
 #include <cassert>
 #include <cerrno>
 
-#define IGNORE_PRINTF 1
+#define IGNORE_PRINTF 0
 #if IGNORE_PRINTF == 1
   #define printf(fmt, ...) (0)
 #endif
@@ -257,6 +257,21 @@ uint32_t TCPSocket::receiveData(byte* buffer, uint32_t max_size_to_read) {
 
 bool TCPSocket::close() {
   connection_status = ConnectionStatus::Disconnected;
+
+  int32_t error_state = 0;
+  socklen_t sizeofint = sizeof(int32_t);
+  errno = 0;
+  int32_t status = getsockopt(socket_descriptor, SOL_SOCKET, SO_ERROR, &error_state, &sizeofint);
+  if (status == -1) {
+    printf("getsockopt: %s\n", strerror(errno));
+  }
+  // at this point, any error in socket_descriptor should have been cleared
+  errno = 0;
+  shutdown(socket_descriptor, SHUT_RDWR);
+  if (errno != 0) {
+    printf("shutdown: %s\n", strerror(errno));
+  }
+
   errno = 0;
   bool result = ::close(socket_descriptor) > -1;
   if (errno != 0) {
@@ -425,7 +440,25 @@ bool TCPListener::close() {
     delete accepted_socket;
   }
   
+  int32_t error_state = 0;
+  socklen_t sizeofint = sizeof(int32_t);
+  errno = 0;
+  int32_t status = getsockopt(socket_descriptor, SOL_SOCKET, SO_ERROR, &error_state, &sizeofint);
+  if (status == -1) {
+    printf("getsockopt: %s\n", strerror(errno));
+  }
+  // at this point, any error in socket_descriptor should have been cleared
+  errno = 0;
+  shutdown(socket_descriptor, SHUT_RDWR);
+  if (errno != 0) {
+    printf("shutdown: %s\n", strerror(errno));
+  }
+
+  errno = 0;
   success = (::close(socket_descriptor) > -1) | success;
+  if (errno != 0) {
+    printf("Close: %s\n", strerror(errno));
+  }
 
   listening_status = ListeningStatus::NotListening;
 

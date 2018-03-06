@@ -167,7 +167,6 @@ int main() {
 
   // }
   printf("Data sent\n");
-  socket.close();
 
   return 0;
 }
