@@ -158,7 +158,7 @@ int main() {
     success = socket.connect("127.0.0.1", 14194);
     //printf("Trying to connect...\n");
   }
-  uint32_t buffer_size = 128;
+  uint32_t buffer_size = 600000;
   byte* data = (byte*)malloc(buffer_size);
   memset(data, 2, buffer_size);
   socket.sendData(data, buffer_size);

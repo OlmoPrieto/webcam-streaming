@@ -4,7 +4,7 @@
 #include <cerrno>
 
 #define IGNORE_PRINTF 1
-#ifdef IGNORE_PRINTF
+#if IGNORE_PRINTF == 1
   #define printf(fmt, ...) (0)
 #endif
 
@@ -35,33 +35,31 @@ bool TCPSocket::connect(const char* ip, uint32_t port) {
   address.sin_port = htons(port);
   assert(address.sin_addr.s_addr != 0 && address.sin_port != 0);
 
-  int status = 0;
+  int32_t status = 0;
   if (connection_status == ConnectionStatus::Disconnected) {
     errno = 0;
     status = ::connect(socket_descriptor, (struct sockaddr*)&address, sizeof(address));
     if (status == -1) {
       if (errno != 0) {
-        printf("Connect: %s\n", strerror(errno));
-      }
+        switch (errno) {
+          case EINPROGRESS:
+          case EALREADY:
+          case EINTR: {
+            printf("Cannot stablish connection now; will keep trying\n");
+            connection_status = ConnectionStatus::Connecting;
 
-      switch (errno) {
-        case EINPROGRESS:
-        case EALREADY:
-        case EINTR: {
-          printf("Cannot stablish connection now; will keep trying\n");
-          connection_status = ConnectionStatus::Connecting;
+            break;
+          }
+          case EINVAL:
+          case ECONNREFUSED: {
+            close();
+            construct();
 
-          break;
-        }
-        case EINVAL:
-        case ECONNREFUSED: {
-          close();
-          construct();
-
-          break;
-        }
-        default: {
-          printf("Connect error not supported: %s\n", strerror(errno));
+            break;
+          }
+          default: {
+            printf("Connect error not supported: %s\n", strerror(errno));
+          }
         }
       }
     }
@@ -83,9 +81,9 @@ bool TCPSocket::connect(const char* ip, uint32_t port) {
     status = select(socket_descriptor + 1, nullptr, &sock_des, nullptr, &timeout);  // CAREFUL: need to ask for fds than can be WRITTEN, not READABLE
     if (status >= 0) {
       if (FD_ISSET(socket_descriptor, &sock_des) > 0) {
-        int error_state = 0;
+        int32_t error_state = 0;
         socklen_t sizeofint = sizeof(int32_t);
-        int result = getsockopt(socket_descriptor, SOL_SOCKET, SO_ERROR, &error_state, &sizeofint);
+        int32_t result = getsockopt(socket_descriptor, SOL_SOCKET, SO_ERROR, &error_state, &sizeofint);
         if (result == 0) {
           if (error_state != 0) {
             printf("Query error value: %s\n", strerror(error_state));
@@ -112,12 +110,77 @@ bool TCPSocket::connect(const char* ip, uint32_t port) {
   return connection_status == ConnectionStatus::Connected;
 }
 
-void TCPSocket::sendData(byte* buffer, uint32_t buffer_size) {
-  errno = 0;
-  ::send(socket_descriptor, buffer, buffer_size, 0);
-  if (errno != 0) {
-    printf("Send data: %s\n", strerror(errno));
+bool TCPSocket::sendData(byte* buffer, uint32_t buffer_size) {
+  uint32_t bytes_sent = 0;
+  int32_t status = 0;
+
+  if (sending_status == SendingStatus::CanSend) {
+    errno = 0;
+    status = ::send(socket_descriptor, buffer, buffer_size, 0);
+    if (status == -1) {
+      if (errno != 0) {
+        switch (errno) {
+          //case EAGAIN:  // looks like in MacOSX the following is defined: #define EWOULDBLOCK EAGAIN
+          case EWOULDBLOCK: {
+            sending_status = SendingStatus::Sending;
+
+            break;
+          }
+          case EPIPE: {
+            printf("The connection was closed\n");
+
+            break;
+          }
+          default: {
+            printf("Send data: %s\n", strerror(errno));
+
+            break;
+          }
+        }
+      }
+    }
   }
+  else if (sending_status == SendingStatus::Sending) {
+    struct fd_set sock_des;
+    memset(&sock_des, 0, sizeof(sock_des));
+    FD_ZERO(&sock_des);
+    FD_SET(socket_descriptor, &sock_des);
+
+    struct timeval timeout;
+    memset(&timeout, 0, sizeof(timeout));
+    //timeout.tv_usec = 1;
+    errno = 0;
+    status = select(socket_descriptor + 1, &sock_des, nullptr, nullptr, &timeout); // CAREFUL: test this
+    if (status >= 0) {
+      if (FD_ISSET(socket_descriptor, &sock_des) > 0) {
+        int error_state = 0;
+        socklen_t sizeofint = sizeof(int32_t);
+        int result = getsockopt(socket_descriptor, SOL_SOCKET, SO_ERROR, &error_state, &sizeofint);
+        if (result == 0) {
+          if (error_state != 0) {
+            printf("Query error value: %s\n", strerror(error_state));
+          }
+          else {
+            printf("No error\n");
+            errno = 0;
+            status = ::send(socket_descriptor, buffer, buffer_size, 0);
+            if (errno != 0) {
+              printf("Send data: %s\n", strerror(errno));
+            }
+            if (status >= 0) {
+              bytes_sent = (uint32_t)status;
+              sending_status = SendingStatus::CanSend;
+            }
+          }
+        }
+        else if (errno != 0) {
+          printf("getsockopt: %s\n", strerror(errno));
+        }
+      }
+    }
+  }
+
+  return bytes_sent > 0;
 }
 
 uint32_t TCPSocket::receiveData(byte* buffer, uint32_t max_size_to_read) {
@@ -128,17 +191,19 @@ uint32_t TCPSocket::receiveData(byte* buffer, uint32_t max_size_to_read) {
     errno = 0;
     status = recv(socket_descriptor, buffer, max_size_to_read, 0);
     if (status == -1) {
-      switch (errno) {
-        //case EAGAIN:  // looks like in MacOSX the following is defined: #define EWOULDBLOCK EAGAIN
-        case EWOULDBLOCK: {
-          receiving_status = ReceivingStatus::Receiving;
+      if (errno != 0) {
+        switch (errno) {
+          //case EAGAIN:  // looks like in MacOSX the following is defined: #define EWOULDBLOCK EAGAIN
+          case EWOULDBLOCK: {
+            receiving_status = ReceivingStatus::Receiving;
 
-          break;
-        }
-        default: {
-          printf("Receive data: %s\n");
+            break;
+          }
+          default: {
+            printf("Receive data: %s\n", strerror(errno));
 
-          break;
+            break;
+          }
         }
       }
     }
@@ -160,9 +225,9 @@ uint32_t TCPSocket::receiveData(byte* buffer, uint32_t max_size_to_read) {
     status = select(socket_descriptor + 1, nullptr, &sock_des, nullptr, &timeout);  // CAREFUL: need to ask for fds than can be WRITTEN, not READABLE
     if (status >= 0) {
       if (FD_ISSET(socket_descriptor, &sock_des) > 0) {
-        int error_state = 0;
+        int32_t error_state = 0;
         socklen_t sizeofint = sizeof(int32_t);
-        int result = getsockopt(socket_descriptor, SOL_SOCKET, SO_ERROR, &error_state, &sizeofint);
+        int32_t result = getsockopt(socket_descriptor, SOL_SOCKET, SO_ERROR, &error_state, &sizeofint);
         if (result == 0) {
           if (error_state != 0) {
             printf("Query error value: %s\n", strerror(error_state));
@@ -191,9 +256,6 @@ uint32_t TCPSocket::receiveData(byte* buffer, uint32_t max_size_to_read) {
 }
 
 bool TCPSocket::close() {
-  // connection_status = ConnectionStatus::Disconnected;
-
-  // return ::close(socket_descriptor) > -1;
   connection_status = ConnectionStatus::Disconnected;
   errno = 0;
   bool result = ::close(socket_descriptor) > -1;
@@ -207,13 +269,16 @@ bool TCPSocket::close() {
 /*private*/TCPSocket::TCPSocket(Type type, uint32_t descriptor) {
   connection_status = ConnectionStatus::Disconnected;
   receiving_status = ReceivingStatus::CanReceive;
+  sending_status = SendingStatus::CanSend;
 
   socket_descriptor = descriptor;
 
   int32_t true_int_value = 1;
   setsockopt(socket_descriptor, SOL_SOCKET, SO_REUSEADDR, (int32_t*)&true_int_value, sizeof(int32_t));  // CAREFUL: this violates TCP/IP protocol making it unlikely but possible for the next program that binds on that port to pick up packets intended for the original program
-  // int32_t flags = type == Type::NonBlock ? 0 : O_NONBLOCK;
-  // fcntl(socket_descriptor, F_SETFL, flags);
+  
+  // TODO: give the option to SO_NOSIGPIPE to be flagable
+  setsockopt(socket_descriptor, SOL_SOCKET, SO_NOSIGPIPE, (int32_t*)&true_int_value, sizeof(int32_t));
+
   if (type == Type::NonBlock) {
     fcntl(socket_descriptor, F_SETFL, O_NONBLOCK);
   }
@@ -226,6 +291,7 @@ bool TCPSocket::close() {
 /*private*/void TCPSocket::construct() {
   connection_status = ConnectionStatus::Disconnected;
   receiving_status = ReceivingStatus::CanReceive;
+  sending_status = SendingStatus::CanSend;
 
   memset(&address, 0, sizeof(address));
   address.sin_family = AF_INET;
@@ -233,8 +299,10 @@ bool TCPSocket::close() {
   socket_descriptor = socket(AF_INET, SOCK_STREAM, 0);
   int32_t true_int_value = 1;
   setsockopt(socket_descriptor, SOL_SOCKET, SO_REUSEADDR, (int32_t*)&true_int_value, sizeof(int32_t));  // CAREFUL: this violates TCP/IP protocol making it unlikely but possible for the next program that binds on that port to pick up packets intended for the original program
-  // int32_t flags = type == Type::NonBlock ? O_NONBLOCK : 0;
-  // fcntl(socket_descriptor, F_SETFL, flags);
+  
+  // TODO: give the option to SO_NOSIGPIPE to be flagable
+  setsockopt(socket_descriptor, SOL_SOCKET, SO_NOSIGPIPE, (int32_t*)&true_int_value, sizeof(int32_t));
+
   if (type == Type::NonBlock) {
     fcntl(socket_descriptor, F_SETFL, O_NONBLOCK);
   }
@@ -273,7 +341,7 @@ bool TCPListener::listen() {
   
 TCPSocket* TCPListener::accept() {
   if (listening_status == ListeningStatus::Listening) {
-    int accepted_socket_des = ::accept(socket_descriptor, nullptr, nullptr);
+    int32_t accepted_socket_des = ::accept(socket_descriptor, nullptr, nullptr);
     if (accepted_socket_des >= 0) {
       if (accepted_socket) {
         accepted_socket->close();
@@ -302,21 +370,21 @@ TCPSocket* TCPListener::accept() {
     struct timeval timeout;
     memset(&timeout, 0, sizeof(timeout));
     errno = 0;
-    int status = select(socket_descriptor + 1, &sock_des, nullptr, nullptr, &timeout);
+    int32_t status = select(socket_descriptor + 1, &sock_des, nullptr, nullptr, &timeout);
     //int status = select(socket_descriptor + 1, nullptr, &sock_des, nullptr, &timeout);
     //if (FD_ISSET(socket_descriptor, &sock_des) > 0) {
     if (status >= 0) {
       if (FD_ISSET(socket_descriptor, &sock_des) > 0) {
-        int error_state = 0;
-        socklen_t sizeofint = sizeof(int);
-        int result = getsockopt(socket_descriptor, SOL_SOCKET, SO_ERROR, &error_state, &sizeofint);
+        int32_t error_state = 0;
+        socklen_t sizeofint = sizeof(int32_t);
+        int32_t result = getsockopt(socket_descriptor, SOL_SOCKET, SO_ERROR, &error_state, &sizeofint);
         if (result == 0) {
           if (error_state != 0) {
             printf("Query error value: %s\n", strerror(error_state));
           }
           else {
             printf("No error\n");
-            int accepted_socket_des = ::accept(socket_descriptor, nullptr, nullptr);
+            int32_t accepted_socket_des = ::accept(socket_descriptor, nullptr, nullptr);
             if (accepted_socket_des >= 0 && accepted_socket) {
               accepted_socket->close();
               delete accepted_socket;
@@ -378,8 +446,10 @@ bool TCPListener::close() {
   socket_descriptor = socket(address.sin_family, SOCK_STREAM, 0);
   int32_t true_int_value = 1;
   setsockopt(socket_descriptor, SOL_SOCKET, SO_REUSEADDR, (int32_t*)&true_int_value, sizeof(int32_t));  // CAREFUL: this violates TCP/IP protocol making it unlikely but possible for the next program that binds on that port to pick up packets intended for the original program
-  // int32_t flags = type == Type::NonBlock ? O_NONBLOCK : 0;
-  // fcntl(socket_descriptor, F_SETFL, flags);
+  
+  // TODO: give the option to SO_NOSIGPIPE to be flagable
+  setsockopt(socket_descriptor, SOL_SOCKET, SO_NOSIGPIPE, (int32_t*)&true_int_value, sizeof(int32_t));
+  
   if (type == Type::NonBlock) {
     fcntl(socket_descriptor, F_SETFL, O_NONBLOCK);
   }

@@ -19,18 +19,20 @@ int main() {
   c.stop();
   acc_time += c.timeAsMilliseconds();
   printf("Time to listen: %.2f ms\n", c.timeAsMilliseconds());
-  c.start();
+  //c.start();
   TCPSocket* socket = nullptr;
   while (!socket) {
+    //c.start();
     socket = listener.accept();
+    //c.stop();
   }
   printf("Accepted connection\n");
-  c.stop();
+  //c.stop();
   acc_time += c.timeAsMilliseconds();
   printf("Time to accept program: %.2f ms\n", c.timeAsMilliseconds());
   c.start();
 
-  uint32_t buffer_size = 128;
+  uint32_t buffer_size = 600000;
   byte* data = (byte*)malloc(buffer_size);
   uint32_t read = 0;
   while (read == 0) {

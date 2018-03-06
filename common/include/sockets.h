@@ -35,13 +35,18 @@ public:
     CanReceive,
     Receiving
   };
+  
+  enum class SendingStatus {
+    CanSend,
+    Sending
+  };
 
   TCPSocket(Type type);
   ~TCPSocket();
 
   //bool bind(uint32_t port);
   bool connect(const char* ip, uint32_t port);
-  void sendData(byte* buffer, uint32_t buffer_size);
+  bool sendData(byte* buffer, uint32_t buffer_size);
   uint32_t receiveData(byte* buffer, uint32_t max_size_to_read);
   bool close();
 
@@ -58,6 +63,7 @@ private:
   int32_t socket_descriptor;
   ConnectionStatus connection_status;
   ReceivingStatus receiving_status;
+  SendingStatus sending_status;
 };
 
 
