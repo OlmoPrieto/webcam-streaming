@@ -290,7 +290,6 @@ bool TCPSocket::close() {
   socket_descriptor = descriptor;
 
   int32_t true_int_value = 1;
-  printf("Before SO_REUSEADDR\n");
   setsockopt(socket_descriptor, SOL_SOCKET, SO_REUSEADDR, (int32_t*)&true_int_value, sizeof(int32_t));  // CAREFUL: this violates TCP/IP protocol making it unlikely but possible for the next program that binds on that port to pick up packets intended for the original program
   
   // TODO: give the option to SO_NOSIGPIPE to be flagable
@@ -358,19 +357,13 @@ bool TCPListener::listen() {
   
 TCPSocket* TCPListener::accept() {
   if (listening_status == ListeningStatus::Listening) {
-    printf("Before accept\n");
     int32_t accepted_socket_des = ::accept(socket_descriptor, nullptr, nullptr);
-    printf("After accept\n");
     if (accepted_socket_des >= 0) {
       if (accepted_socket) {
         accepted_socket->close();
-        printf("Deleting socket\n");
         delete accepted_socket;
       }
       accepted_socket = new TCPSocket(type, accepted_socket_des);
-      printf("After new socket\n");
-
-      //listening_status = ListeningStatus::Listening;
     }
     else {
       if (errno != 0) {
