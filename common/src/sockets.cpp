@@ -11,12 +11,18 @@
 
 // [TCPSocket]
 TCPSocket::TCPSocket(Type _type) {
-  type = _type;
-  construct();
+  memset(&address, 0, sizeof(address));
+  address.sin_family = AF_INET;
+                            // AF_INET
+  socket_descriptor = socket(address.sin_family, SOCK_STREAM, 0);
+
+  construct(_type);
 }
 
 TCPSocket::~TCPSocket() {
-  close();
+  if (!closed) {
+    close();
+  }
 }
 
 // bool TCPSocket::bind(uint32_t port) {
@@ -54,7 +60,7 @@ bool TCPSocket::connect(const char* ip, uint32_t port) {
           case EINVAL:
           case ECONNREFUSED: {
             close();
-            construct();
+            construct(type);
 
             break;
           }
@@ -90,7 +96,7 @@ bool TCPSocket::connect(const char* ip, uint32_t port) {
             printf("Query error value: %s\n", strerror(error_state));
             if (error_state == ECONNREFUSED) {
               close();
-              construct();
+              construct(type);
             }
           }
           else {
@@ -279,40 +285,35 @@ bool TCPSocket::close() {
     printf("Close: %s\n", strerror(errno));
   }
 
+  closed = result;
+
   return result;
 }
   
 /*private*/TCPSocket::TCPSocket(Type type, uint32_t descriptor) {
-  connection_status = ConnectionStatus::Disconnected;
-  receiving_status = ReceivingStatus::CanReceive;
-  sending_status = SendingStatus::CanSend;
-
   socket_descriptor = descriptor;
 
-  int32_t true_int_value = 1;
-  setsockopt(socket_descriptor, SOL_SOCKET, SO_REUSEADDR, (int32_t*)&true_int_value, sizeof(int32_t));  // CAREFUL: this violates TCP/IP protocol making it unlikely but possible for the next program that binds on that port to pick up packets intended for the original program
-  
-  // TODO: give the option to SO_NOSIGPIPE to be flagable
-  //setsockopt(socket_descriptor, SOL_SOCKET, SO_NOSIGPIPE, (int32_t*)&true_int_value, sizeof(int32_t));
-
-  if (type == Type::NonBlock) {
-    fcntl(socket_descriptor, F_SETFL, O_NONBLOCK);
-  }
+  construct(type);
 }
 
 /*private*/TCPSocket::TCPSocket() {
-  construct();
+  memset(&address, 0, sizeof(address));
+  address.sin_family = AF_INET;
+                            // AF_INET
+  socket_descriptor = socket(address.sin_family, SOCK_STREAM, 0);
+
+  construct(Socket::Type::NonBlock);
 }
 
-/*private*/void TCPSocket::construct() {
+/*private*/void TCPSocket::construct(Socket::Type _type) {
+  type = _type;
+
+  closed = false;
+
   connection_status = ConnectionStatus::Disconnected;
   receiving_status = ReceivingStatus::CanReceive;
   sending_status = SendingStatus::CanSend;
 
-  memset(&address, 0, sizeof(address));
-  address.sin_family = AF_INET;
-
-  socket_descriptor = socket(AF_INET, SOCK_STREAM, 0);
   int32_t true_int_value = 1;
   setsockopt(socket_descriptor, SOL_SOCKET, SO_REUSEADDR, (int32_t*)&true_int_value, sizeof(int32_t));  // CAREFUL: this violates TCP/IP protocol making it unlikely but possible for the next program that binds on that port to pick up packets intended for the original program
   
@@ -333,13 +334,14 @@ bool TCPSocket::close() {
 
 // [TCPListener]
 TCPListener::TCPListener(Type _type, uint32_t _queue_size) {
-  type = _type;
   queue_size = _queue_size;
-  construct();
+  construct(_type);
 }
 
 TCPListener::~TCPListener() {
-  close();
+  if (!closed) {
+    close();
+  }
 }
 
 bool TCPListener::bind(uint32_t port) {
@@ -460,18 +462,23 @@ bool TCPListener::close() {
   }
 
   listening_status = ListeningStatus::NotListening;
+  closed = success;
 
   return success;
 }
 
 /*private*/TCPListener::TCPListener() {
-  construct();
+  construct(Socket::Type::NonBlock);
 }
 
-/*private*/void TCPListener::construct() {
+/*private*/void TCPListener::construct(Socket::Type _type) {
+  type = _type;
+
   listening_status = ListeningStatus::NotListening;
 
   accepted_socket = nullptr;
+  queue_size = 32;
+  closed = false;
 
   memset(&address, 0, sizeof(address));
   address.sin_family = AF_INET;

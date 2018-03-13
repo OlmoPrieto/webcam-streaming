@@ -53,17 +53,18 @@ public:
 private:
   friend class TCPListener;
   
-  TCPSocket(Type type, uint32_t descriptor);
+  TCPSocket(Socket::Type type, uint32_t descriptor);
   TCPSocket();
-  void construct();
+  void construct(Socket::Type type);
   int32_t getDescriptor() const;
 
   struct sockaddr_in address;
   Type type;
-  int32_t socket_descriptor;
   ConnectionStatus connection_status;
   ReceivingStatus receiving_status;
   SendingStatus sending_status;
+  int32_t socket_descriptor;
+  bool closed;
 };
 
 
@@ -76,7 +77,7 @@ public:
     Accepted
   };
 
-  TCPListener(Type type, uint32_t queue_size = 32);
+  TCPListener(Socket::Type type, uint32_t queue_size = 32);
   ~TCPListener();
 
   bool bind(uint32_t port);
@@ -87,14 +88,15 @@ public:
 
 private:
   TCPListener();
-  void construct();
+  void construct(Socket::Type type);
 
   struct sockaddr_in address;
   Type type;
+  ListeningStatus listening_status;
   TCPSocket* accepted_socket;
   uint32_t queue_size;
   int32_t socket_descriptor;
-  ListeningStatus listening_status;
+  bool closed;
 };
 
 #endif // __SOCKETS_H__
