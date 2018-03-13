@@ -155,8 +155,8 @@ int main() {
   TCPSocket socket(Socket::Type::NonBlock);
   bool success = false;
   while (!success) {
-    //success = socket.connect("127.0.0.1", 14194);
-    success = socket.connect("81.202.4.30", 14194);
+    success = socket.connect("127.0.0.1", 14194);
+    //success = socket.connect("81.202.4.30", 14194);
     //printf("Trying to connect...\n");
   }
   uint32_t buffer_size = 600000;
