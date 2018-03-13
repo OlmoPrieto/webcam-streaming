@@ -5,9 +5,6 @@
 #include "sockets.h"
 #include "chrono.h"
 
-// TODO: now there are two versions of sockets.h and sockets.cpp, 
-// unify in a Base project with only include and src folders
-
 int main() {
   float acc_time = 0.0f;
   Chrono c;
@@ -29,7 +26,7 @@ int main() {
   printf("Accepted connection\n");
   //c.stop();
   acc_time += c.timeAsMilliseconds();
-  printf("Time to accept program: %.2f ms\n", c.timeAsMilliseconds());
+  printf("Time to accept client: %.2f ms\n", c.timeAsMilliseconds());
   c.start();
 
   uint32_t buffer_size = 600000;

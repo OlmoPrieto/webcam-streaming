@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <cerrno>
+#include <cstdio>
 
 #define IGNORE_PRINTF 0
 #if IGNORE_PRINTF == 1
@@ -69,7 +70,7 @@ bool TCPSocket::connect(const char* ip, uint32_t port) {
     }
   }
   else if (connection_status == ConnectionStatus::Connecting) {
-    struct fd_set sock_des;
+    fd_set sock_des;
     memset(&sock_des, 0, sizeof(sock_des));
     FD_ZERO(&sock_des);
     FD_SET(socket_descriptor, &sock_des);
@@ -141,7 +142,7 @@ bool TCPSocket::sendData(byte* buffer, uint32_t buffer_size) {
     }
   }
   else if (sending_status == SendingStatus::Sending) {
-    struct fd_set sock_des;
+    fd_set sock_des;
     memset(&sock_des, 0, sizeof(sock_des));
     FD_ZERO(&sock_des);
     FD_SET(socket_descriptor, &sock_des);
@@ -213,7 +214,7 @@ uint32_t TCPSocket::receiveData(byte* buffer, uint32_t max_size_to_read) {
     }
   }
   else if (receiving_status == ReceivingStatus::Receiving) {
-    struct fd_set sock_des;
+    fd_set sock_des;
     memset(&sock_des, 0, sizeof(sock_des));
     FD_ZERO(&sock_des);
     FD_SET(socket_descriptor, &sock_des);
@@ -289,10 +290,11 @@ bool TCPSocket::close() {
   socket_descriptor = descriptor;
 
   int32_t true_int_value = 1;
+  printf("Before SO_REUSEADDR\n");
   setsockopt(socket_descriptor, SOL_SOCKET, SO_REUSEADDR, (int32_t*)&true_int_value, sizeof(int32_t));  // CAREFUL: this violates TCP/IP protocol making it unlikely but possible for the next program that binds on that port to pick up packets intended for the original program
   
   // TODO: give the option to SO_NOSIGPIPE to be flagable
-  setsockopt(socket_descriptor, SOL_SOCKET, SO_NOSIGPIPE, (int32_t*)&true_int_value, sizeof(int32_t));
+  //setsockopt(socket_descriptor, SOL_SOCKET, SO_NOSIGPIPE, (int32_t*)&true_int_value, sizeof(int32_t));
 
   if (type == Type::NonBlock) {
     fcntl(socket_descriptor, F_SETFL, O_NONBLOCK);
@@ -316,7 +318,7 @@ bool TCPSocket::close() {
   setsockopt(socket_descriptor, SOL_SOCKET, SO_REUSEADDR, (int32_t*)&true_int_value, sizeof(int32_t));  // CAREFUL: this violates TCP/IP protocol making it unlikely but possible for the next program that binds on that port to pick up packets intended for the original program
   
   // TODO: give the option to SO_NOSIGPIPE to be flagable
-  setsockopt(socket_descriptor, SOL_SOCKET, SO_NOSIGPIPE, (int32_t*)&true_int_value, sizeof(int32_t));
+  //setsockopt(socket_descriptor, SOL_SOCKET, SO_NOSIGPIPE, (int32_t*)&true_int_value, sizeof(int32_t));
 
   if (type == Type::NonBlock) {
     fcntl(socket_descriptor, F_SETFL, O_NONBLOCK);
@@ -356,13 +358,17 @@ bool TCPListener::listen() {
   
 TCPSocket* TCPListener::accept() {
   if (listening_status == ListeningStatus::Listening) {
+    printf("Before accept\n");
     int32_t accepted_socket_des = ::accept(socket_descriptor, nullptr, nullptr);
+    printf("After accept\n");
     if (accepted_socket_des >= 0) {
       if (accepted_socket) {
         accepted_socket->close();
+        printf("Deleting socket\n");
         delete accepted_socket;
       }
       accepted_socket = new TCPSocket(type, accepted_socket_des);
+      printf("After new socket\n");
 
       //listening_status = ListeningStatus::Listening;
     }
@@ -378,7 +384,7 @@ TCPSocket* TCPListener::accept() {
     }
   }
   else if (listening_status == ListeningStatus::WaitingForAccept) {
-    struct fd_set sock_des;
+    fd_set sock_des;
     FD_ZERO(&sock_des);
     FD_SET(socket_descriptor, &sock_des);
 
@@ -472,6 +478,8 @@ bool TCPListener::close() {
 /*private*/void TCPListener::construct() {
   listening_status = ListeningStatus::NotListening;
 
+  accepted_socket = nullptr;
+
   memset(&address, 0, sizeof(address));
   address.sin_family = AF_INET;
 
@@ -481,7 +489,7 @@ bool TCPListener::close() {
   setsockopt(socket_descriptor, SOL_SOCKET, SO_REUSEADDR, (int32_t*)&true_int_value, sizeof(int32_t));  // CAREFUL: this violates TCP/IP protocol making it unlikely but possible for the next program that binds on that port to pick up packets intended for the original program
   
   // TODO: give the option to SO_NOSIGPIPE to be flagable
-  setsockopt(socket_descriptor, SOL_SOCKET, SO_NOSIGPIPE, (int32_t*)&true_int_value, sizeof(int32_t));
+  //setsockopt(socket_descriptor, SOL_SOCKET, SO_NOSIGPIPE, (int32_t*)&true_int_value, sizeof(int32_t));
   
   if (type == Type::NonBlock) {
     fcntl(socket_descriptor, F_SETFL, O_NONBLOCK);
