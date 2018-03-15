@@ -261,7 +261,7 @@ int main(int argc, char** argv) {
   EnableVideoStreaming();
 
   TCPListener listener(Socket::Type::NonBlock, 128);
-  TCPSocket* socket;
+  TCPSocket* socket = nullptr;
   InitializeNetwork(&listener, socket);
 
   /* MAIN LOOP */
@@ -280,8 +280,8 @@ int main(int argc, char** argv) {
     );
     // std::thread(SendData, ...);
     std::thread send_data_thread(
-      []() {
-        SendData();
+      [socket, send_ptr, image_size]() {
+        SendData(socket, send_ptr, image_size);
       }
     );
 
