@@ -408,8 +408,10 @@ void NetworkTask() {
     switch (g_network_state) {
       case NetworkState::NotConnected: {
         while (!success && !g_program_should_finish) {
-          success = g_socket.connect("81.202.4.30", 14194);
+          //success = g_socket.connect("81.202.4.30", 14194);
+          success = g_socket.connect("127.0.0.1", 14194);
           // should reset success to false;
+          //success = true;
         }
 
         g_network_state = NetworkState::Connected;
@@ -423,11 +425,15 @@ void NetworkTask() {
         break;
       }
       case NetworkState::Receiving: {
-        uint32_t read_bytes = g_socket.receiveData(g_recv_data_ptr, g_image_width * g_image_height * 4);
-      
+        uint32_t read_bytes = g_socket.receiveData(g_recv_data_ptr, g_image_width * g_image_height * 3);
+        
         if (read_bytes == 0) {
           g_can_sync_network = false;
           ignore_sync_flag = true;
+        }
+        else {
+          printf("Data received\n");
+          g_network_state = NetworkState::Connected;
         }
 
         break;
@@ -435,8 +441,10 @@ void NetworkTask() {
     }
 
     if (!ignore_sync_flag) {
-      ignore_sync_flag = false;
       g_can_sync_network = true;
+    }
+    else {
+      ignore_sync_flag = false;
     }
   }
 
@@ -459,17 +467,17 @@ int main() {
   	c.start();
     glClear(GL_COLOR_BUFFER_BIT);
 
-    byte* ptr = g_draw_buffer;
-	  memset(ptr, 0, g_image_width * g_image_height * 4);
-	  for (unsigned int i = 0; i < g_image_width * g_image_height; i++) {
-	  	*ptr      = r;
-	  	*(ptr+1)  = g;
-	  	*(ptr+2)  = b;
-	  	*(ptr+3)  = 255;
-	  	ptr += 4;
-	  }
-	  r++; g++; b++;
-	  r %= 255; g %= 255; b %= 255;
+   //  byte* ptr = g_draw_buffer;
+	  // memset(ptr, 0, g_image_width * g_image_height * 4);
+	  // for (unsigned int i = 0; i < g_image_width * g_image_height; i++) {
+	  // 	*ptr      = r;
+	  // 	*(ptr+1)  = g;
+	  // 	*(ptr+2)  = b;
+	  // 	*(ptr+3)  = 255;
+	  // 	ptr += 4;
+	  // }
+	  // r++; g++; b++;
+	  // r %= 255; g %= 255; b %= 255;
 	  glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 
 	  	g_image_width, g_image_height, GL_RGBA, GL_UNSIGNED_BYTE, g_draw_buffer_ptr);
 
@@ -477,7 +485,7 @@ int main() {
     //CheckGLError("glDrawArrays");
 
     c.stop();
-    printf("Frame time: %.2f ms\n", c.timeAsMilliseconds());
+    //printf("Frame time: %.2f ms\n", c.timeAsMilliseconds());
 
     // Sync point
     // Swap between drawing buffer and the received buffer by network.

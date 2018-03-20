@@ -73,8 +73,8 @@ void ProcessImage(byte* src_image, unsigned int src_size,
   }
   c.stop();
 
-  printf("Pixels that differ: %u\n", count);
-  printf("Time to process image: %.2fms\n", c.timeAsMilliseconds());
+  //printf("Pixels that differ: %u\n", count);
+  //printf("Time to process image: %.2fms\n", c.timeAsMilliseconds());
 }
 
 void SendData(TCPSocket* socket, byte* buffer, uint32_t buffer_size) {
@@ -296,6 +296,8 @@ void NetworkTask(byte* send_ptr) {
             socket = listener.accept();
           }
 
+          printf("Peer connected!\n");
+
           g_network_state = NetworkState::PeerConnected;
 
           break;
@@ -319,6 +321,7 @@ void NetworkTask(byte* send_ptr) {
           if (socket->sendData(send_ptr, g_format.fmt.pix.sizeimage)) {
             g_can_send_data = false;
             g_network_state = NetworkState::PeerConnected;
+          	printf("Data sent\n");
           }
 
           break;
@@ -356,6 +359,11 @@ int main(int argc, char** argv) {
   process_ptr   = buffers[2];
   send_ptr      = buffers[3];
 
+  memset(read_ptr, 0xFF0000, g_format.fmt.pix.sizeimage);
+  memset(read_copy_ptr, 0xFF0000, g_format.fmt.pix.sizeimage);
+  memset(process_ptr, 0xFF0000, g_format.fmt.pix.sizeimage);
+  memset(send_ptr, 0xFF0000, g_format.fmt.pix.sizeimage);
+
   //EnableVideoStreaming();
 
   /* MAIN LOOP */
@@ -376,6 +384,8 @@ int main(int argc, char** argv) {
       g_can_sync_processing = false;
       g_can_sync_network = false;
 
+      //printf("Swapping buffers...\n");
+
       read_ptr      = buffers[(index) % 3];
       read_copy_ptr = buffers[(index + 1) % 3];
       process_ptr   = buffers[(index + 2) % 3];
@@ -390,7 +400,7 @@ int main(int argc, char** argv) {
 
 
     c.stop();
-    printf("Frame time: %.2fms\n", c.timeAsMilliseconds());
+    //printf("Frame time: %.2fms\n", c.timeAsMilliseconds());
   }
   /* \MAIN LOOP */
 

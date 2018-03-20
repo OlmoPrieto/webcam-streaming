@@ -47,9 +47,9 @@ ifeq ($(config),debug)
   TARGETDIR           = bin
   TARGET              = $(TARGETDIR)/Server
   DEFINES            += -D__PLATFORM_LINUX__ -DDEBUG
-  INCLUDES           += -I"include" -I"../common/include"
+  INCLUDES           += -Iinclude -I../common/include
+  INCLUDES           +=
   ALL_CPPFLAGS       += $(CPPFLAGS) -MMD -MP -MP $(DEFINES) $(INCLUDES)
-  ALL_ASMFLAGS       += $(ASMFLAGS) $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -g -Wall -Wextra
   ALL_CFLAGS         += $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -g -Wall -Wextra
   ALL_CXXFLAGS       += $(CXXFLAGS) $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -g -Wall -Wextra -std=c++11
   ALL_OBJCFLAGS      += $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -g -Wall -Wextra
@@ -59,7 +59,7 @@ ifeq ($(config),debug)
   LDDEPS             +=
   LIBS               += $(LDDEPS) -lpthread
   EXTERNAL_LIBS      +=
-  LINKCMD             = $(CXX) -o $(TARGET) @$(TARGET).objects $(RESOURCES) $(ARCH) $(ALL_LDFLAGS) $(LIBS)
+  LINKCMD             = $(CXX) -o $(TARGET) $(OBJECTS) $(RESOURCES) $(ARCH) $(ALL_LDFLAGS) $(LIBS)
   OBJECTS := \
 	$(OBJDIR)/common/src/sockets.o \
 	$(OBJDIR)/src/main.o \
@@ -77,9 +77,9 @@ ifeq ($(config),release)
   TARGETDIR           = bin
   TARGET              = $(TARGETDIR)/Server
   DEFINES            += -D__PLATFORM_LINUX__ -DNDEBUG
-  INCLUDES           += -I"include" -I"../common/include"
+  INCLUDES           += -Iinclude -I../common/include
+  INCLUDES           +=
   ALL_CPPFLAGS       += $(CPPFLAGS) -MMD -MP -MP $(DEFINES) $(INCLUDES)
-  ALL_ASMFLAGS       += $(ASMFLAGS) $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -O2 -Wall -Wextra
   ALL_CFLAGS         += $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -O2 -Wall -Wextra
   ALL_CXXFLAGS       += $(CXXFLAGS) $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -O2 -Wall -Wextra -std=c++11
   ALL_OBJCFLAGS      += $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -O2 -Wall -Wextra
@@ -89,7 +89,7 @@ ifeq ($(config),release)
   LDDEPS             +=
   LIBS               += $(LDDEPS) -lpthread
   EXTERNAL_LIBS      +=
-  LINKCMD             = $(CXX) -o $(TARGET) @$(TARGET).objects $(RESOURCES) $(ARCH) $(ALL_LDFLAGS) $(LIBS)
+  LINKCMD             = $(CXX) -o $(TARGET) $(OBJECTS) $(RESOURCES) $(ARCH) $(ALL_LDFLAGS) $(LIBS)
   OBJECTS := \
 	$(OBJDIR)/common/src/sockets.o \
 	$(OBJDIR)/src/main.o \
@@ -107,9 +107,9 @@ ifeq ($(config),debug64)
   TARGETDIR           = bin
   TARGET              = $(TARGETDIR)/Server
   DEFINES            += -D__PLATFORM_LINUX__ -DDEBUG
-  INCLUDES           += -I"include" -I"../common/include"
+  INCLUDES           += -Iinclude -I../common/include
+  INCLUDES           +=
   ALL_CPPFLAGS       += $(CPPFLAGS) -MMD -MP -MP $(DEFINES) $(INCLUDES)
-  ALL_ASMFLAGS       += $(ASMFLAGS) $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -g -Wall -Wextra -m64
   ALL_CFLAGS         += $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -g -Wall -Wextra -m64
   ALL_CXXFLAGS       += $(CXXFLAGS) $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -g -Wall -Wextra -m64 -std=c++11
   ALL_OBJCFLAGS      += $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -g -Wall -Wextra -m64
@@ -119,7 +119,7 @@ ifeq ($(config),debug64)
   LDDEPS             +=
   LIBS               += $(LDDEPS) -lpthread
   EXTERNAL_LIBS      +=
-  LINKCMD             = $(CXX) -o $(TARGET) @$(TARGET).objects $(RESOURCES) $(ARCH) $(ALL_LDFLAGS) $(LIBS)
+  LINKCMD             = $(CXX) -o $(TARGET) $(OBJECTS) $(RESOURCES) $(ARCH) $(ALL_LDFLAGS) $(LIBS)
   OBJECTS := \
 	$(OBJDIR)/common/src/sockets.o \
 	$(OBJDIR)/src/main.o \
@@ -137,9 +137,9 @@ ifeq ($(config),release64)
   TARGETDIR           = bin
   TARGET              = $(TARGETDIR)/Server
   DEFINES            += -D__PLATFORM_LINUX__ -DNDEBUG
-  INCLUDES           += -I"include" -I"../common/include"
+  INCLUDES           += -Iinclude -I../common/include
+  INCLUDES           +=
   ALL_CPPFLAGS       += $(CPPFLAGS) -MMD -MP -MP $(DEFINES) $(INCLUDES)
-  ALL_ASMFLAGS       += $(ASMFLAGS) $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -O2 -Wall -Wextra -m64
   ALL_CFLAGS         += $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -O2 -Wall -Wextra -m64
   ALL_CXXFLAGS       += $(CXXFLAGS) $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -O2 -Wall -Wextra -m64 -std=c++11
   ALL_OBJCFLAGS      += $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -O2 -Wall -Wextra -m64
@@ -149,7 +149,7 @@ ifeq ($(config),release64)
   LDDEPS             +=
   LIBS               += $(LDDEPS) -lpthread
   EXTERNAL_LIBS      +=
-  LINKCMD             = $(CXX) -o $(TARGET) @$(TARGET).objects $(RESOURCES) $(ARCH) $(ALL_LDFLAGS) $(LIBS)
+  LINKCMD             = $(CXX) -o $(TARGET) $(OBJECTS) $(RESOURCES) $(ARCH) $(ALL_LDFLAGS) $(LIBS)
   OBJECTS := \
 	$(OBJDIR)/common/src/sockets.o \
 	$(OBJDIR)/src/main.o \
@@ -167,9 +167,9 @@ ifeq ($(config),debug32)
   TARGETDIR           = bin
   TARGET              = $(TARGETDIR)/Server
   DEFINES            += -D__PLATFORM_LINUX__ -DDEBUG
-  INCLUDES           += -I"include" -I"../common/include"
+  INCLUDES           += -Iinclude -I../common/include
+  INCLUDES           +=
   ALL_CPPFLAGS       += $(CPPFLAGS) -MMD -MP -MP $(DEFINES) $(INCLUDES)
-  ALL_ASMFLAGS       += $(ASMFLAGS) $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -g -Wall -Wextra -m32
   ALL_CFLAGS         += $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -g -Wall -Wextra -m32
   ALL_CXXFLAGS       += $(CXXFLAGS) $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -g -Wall -Wextra -m32 -std=c++11
   ALL_OBJCFLAGS      += $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -g -Wall -Wextra -m32
@@ -179,7 +179,7 @@ ifeq ($(config),debug32)
   LDDEPS             +=
   LIBS               += $(LDDEPS) -lpthread
   EXTERNAL_LIBS      +=
-  LINKCMD             = $(CXX) -o $(TARGET) @$(TARGET).objects $(RESOURCES) $(ARCH) $(ALL_LDFLAGS) $(LIBS)
+  LINKCMD             = $(CXX) -o $(TARGET) $(OBJECTS) $(RESOURCES) $(ARCH) $(ALL_LDFLAGS) $(LIBS)
   OBJECTS := \
 	$(OBJDIR)/common/src/sockets.o \
 	$(OBJDIR)/src/main.o \
@@ -197,9 +197,9 @@ ifeq ($(config),release32)
   TARGETDIR           = bin
   TARGET              = $(TARGETDIR)/Server
   DEFINES            += -D__PLATFORM_LINUX__ -DNDEBUG
-  INCLUDES           += -I"include" -I"../common/include"
+  INCLUDES           += -Iinclude -I../common/include
+  INCLUDES           +=
   ALL_CPPFLAGS       += $(CPPFLAGS) -MMD -MP -MP $(DEFINES) $(INCLUDES)
-  ALL_ASMFLAGS       += $(ASMFLAGS) $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -O2 -Wall -Wextra -m32
   ALL_CFLAGS         += $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -O2 -Wall -Wextra -m32
   ALL_CXXFLAGS       += $(CXXFLAGS) $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -O2 -Wall -Wextra -m32 -std=c++11
   ALL_OBJCFLAGS      += $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -O2 -Wall -Wextra -m32
@@ -209,7 +209,7 @@ ifeq ($(config),release32)
   LDDEPS             +=
   LIBS               += $(LDDEPS) -lpthread
   EXTERNAL_LIBS      +=
-  LINKCMD             = $(CXX) -o $(TARGET) @$(TARGET).objects $(RESOURCES) $(ARCH) $(ALL_LDFLAGS) $(LIBS)
+  LINKCMD             = $(CXX) -o $(TARGET) $(OBJECTS) $(RESOURCES) $(ARCH) $(ALL_LDFLAGS) $(LIBS)
   OBJECTS := \
 	$(OBJDIR)/common/src/sockets.o \
 	$(OBJDIR)/src/main.o \
@@ -231,14 +231,12 @@ RESOURCES := \
 
 .PHONY: clean prebuild prelink
 
-all: $(OBJDIRS) $(TARGETDIR) prebuild prelink $(TARGET)
+all: $(OBJDIRS) prebuild prelink $(TARGET) | $(TARGETDIR)
 	@:
 
 $(TARGET): $(GCH) $(OBJECTS) $(LDDEPS) $(EXTERNAL_LIBS) $(RESOURCES) | $(TARGETDIR) $(OBJDIRS)
 	@echo Linking Server
-	$(file >$(TARGET).objects,$(OBJECTS))
 	$(SILENT) $(LINKCMD)
-	$(call RM,$(TARGET).objects)
 	$(POSTBUILDCMDS)
 
 $(TARGETDIR):
@@ -286,5 +284,4 @@ $(OBJDIR)/src/main.o: src/main.cpp $(GCH) $(MAKEFILE)
 -include $(OBJECTS:%.o=%.d)
 ifneq (,$(PCH))
   -include $(OBJDIR)/$(notdir $(PCH)).d
-  -include $(OBJDIR)/$(notdir $(PCH))_objc.d
 endif

@@ -386,6 +386,7 @@ TCPSocket* TCPListener::accept() {
         delete accepted_socket;
       }
       accepted_socket = new TCPSocket(type, accepted_socket_des);
+      accepted_socket->connection_status = TCPSocket::ConnectionStatus::Connected;
     }
     else {
       if (errno != 0) {
@@ -426,6 +427,7 @@ TCPSocket* TCPListener::accept() {
               delete accepted_socket;
             }
             accepted_socket = new TCPSocket(type, accepted_socket_des);
+            accepted_socket->connection_status = TCPSocket::ConnectionStatus::Connected;
 
             listening_status = ListeningStatus::Listening;
           }

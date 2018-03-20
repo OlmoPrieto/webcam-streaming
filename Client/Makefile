@@ -47,19 +47,19 @@ ifeq ($(config),debug)
   TARGETDIR           = bin
   TARGET              = $(TARGETDIR)/Client
   DEFINES            += -D__PLATFORM_LINUX__ -D_GLFW_X11 -D_GLFW_HAS_GLXGETPROCADDRESS -D_GLFW_GLX -D_GLFW_USE_OPENGL -DDEBUG
-  INCLUDES           += -I"include" -I"dependencies" -I"dependencies/glew/include" -I"dependencies/GLFW/deps" -I"../common/include" -I"../../../../../usr/include/GL"
+  INCLUDES           += -Iinclude -Idependencies -Idependencies/glew/include -Idependencies/GLFW/deps -I../common/include -I/usr/include/GL
+  INCLUDES           +=
   ALL_CPPFLAGS       += $(CPPFLAGS) -MMD -MP -MP $(DEFINES) $(INCLUDES)
-  ALL_ASMFLAGS       += $(ASMFLAGS) $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -g -Wall -Wextra
   ALL_CFLAGS         += $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -g -Wall -Wextra
   ALL_CXXFLAGS       += $(CXXFLAGS) $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -g -Wall -Wextra -std=c++11
   ALL_OBJCFLAGS      += $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -g -Wall -Wextra
   ALL_OBJCPPFLAGS    += $(CXXFLAGS) $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -g -Wall -Wextra -std=c++11
   ALL_RESFLAGS       += $(RESFLAGS) $(DEFINES) $(INCLUDES)
-  ALL_LDFLAGS        += $(LDFLAGS) -L../../../../../usr/bin -L../../../../../usr/lib -L.
+  ALL_LDFLAGS        += $(LDFLAGS) -L/usr/bin -L/usr/lib -L.
   LDDEPS             +=
   LIBS               += $(LDDEPS) -lX11 -lXrandr -lXcursor -lXinerama -lXi -lXxf86vm -lrt -lpthread -lGL -lglut -lGLU -lm
   EXTERNAL_LIBS      +=
-  LINKCMD             = $(CXX) -o $(TARGET) @$(TARGET).objects $(RESOURCES) $(ARCH) $(ALL_LDFLAGS) $(LIBS)
+  LINKCMD             = $(CXX) -o $(TARGET) $(OBJECTS) $(RESOURCES) $(ARCH) $(ALL_LDFLAGS) $(LIBS)
   OBJECTS := \
 	$(OBJDIR)/common/src/sockets.o \
 	$(OBJDIR)/dependencies/GLFW/src/context.o \
@@ -91,19 +91,19 @@ ifeq ($(config),release)
   TARGETDIR           = bin
   TARGET              = $(TARGETDIR)/Client
   DEFINES            += -D__PLATFORM_LINUX__ -D_GLFW_X11 -D_GLFW_HAS_GLXGETPROCADDRESS -D_GLFW_GLX -D_GLFW_USE_OPENGL -DNDEBUG
-  INCLUDES           += -I"include" -I"dependencies" -I"dependencies/glew/include" -I"dependencies/GLFW/deps" -I"../common/include" -I"../../../../../usr/include/GL"
+  INCLUDES           += -Iinclude -Idependencies -Idependencies/glew/include -Idependencies/GLFW/deps -I../common/include -I/usr/include/GL
+  INCLUDES           +=
   ALL_CPPFLAGS       += $(CPPFLAGS) -MMD -MP -MP $(DEFINES) $(INCLUDES)
-  ALL_ASMFLAGS       += $(ASMFLAGS) $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -O2 -Wall -Wextra
   ALL_CFLAGS         += $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -O2 -Wall -Wextra
   ALL_CXXFLAGS       += $(CXXFLAGS) $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -O2 -Wall -Wextra -std=c++11
   ALL_OBJCFLAGS      += $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -O2 -Wall -Wextra
   ALL_OBJCPPFLAGS    += $(CXXFLAGS) $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -O2 -Wall -Wextra -std=c++11
   ALL_RESFLAGS       += $(RESFLAGS) $(DEFINES) $(INCLUDES)
-  ALL_LDFLAGS        += $(LDFLAGS) -L../../../../../usr/bin -L../../../../../usr/lib -L. -s
+  ALL_LDFLAGS        += $(LDFLAGS) -L/usr/bin -L/usr/lib -L. -s
   LDDEPS             +=
   LIBS               += $(LDDEPS) -lX11 -lXrandr -lXcursor -lXinerama -lXi -lXxf86vm -lrt -lpthread -lGL -lglut -lGLU -lm
   EXTERNAL_LIBS      +=
-  LINKCMD             = $(CXX) -o $(TARGET) @$(TARGET).objects $(RESOURCES) $(ARCH) $(ALL_LDFLAGS) $(LIBS)
+  LINKCMD             = $(CXX) -o $(TARGET) $(OBJECTS) $(RESOURCES) $(ARCH) $(ALL_LDFLAGS) $(LIBS)
   OBJECTS := \
 	$(OBJDIR)/common/src/sockets.o \
 	$(OBJDIR)/dependencies/GLFW/src/context.o \
@@ -135,19 +135,19 @@ ifeq ($(config),debug64)
   TARGETDIR           = bin
   TARGET              = $(TARGETDIR)/Client
   DEFINES            += -D__PLATFORM_LINUX__ -D_GLFW_X11 -D_GLFW_HAS_GLXGETPROCADDRESS -D_GLFW_GLX -D_GLFW_USE_OPENGL -DDEBUG
-  INCLUDES           += -I"include" -I"dependencies" -I"dependencies/glew/include" -I"dependencies/GLFW/deps" -I"../common/include" -I"../../../../../usr/include/GL"
+  INCLUDES           += -Iinclude -Idependencies -Idependencies/glew/include -Idependencies/GLFW/deps -I../common/include -I/usr/include/GL
+  INCLUDES           +=
   ALL_CPPFLAGS       += $(CPPFLAGS) -MMD -MP -MP $(DEFINES) $(INCLUDES)
-  ALL_ASMFLAGS       += $(ASMFLAGS) $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -g -Wall -Wextra -m64
   ALL_CFLAGS         += $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -g -Wall -Wextra -m64
   ALL_CXXFLAGS       += $(CXXFLAGS) $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -g -Wall -Wextra -m64 -std=c++11
   ALL_OBJCFLAGS      += $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -g -Wall -Wextra -m64
   ALL_OBJCPPFLAGS    += $(CXXFLAGS) $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -g -Wall -Wextra -m64 -std=c++11
   ALL_RESFLAGS       += $(RESFLAGS) $(DEFINES) $(INCLUDES)
-  ALL_LDFLAGS        += $(LDFLAGS) -L../../../../../usr/bin -L../../../../../usr/lib -L. -m64
+  ALL_LDFLAGS        += $(LDFLAGS) -L/usr/bin -L/usr/lib -L. -m64
   LDDEPS             +=
   LIBS               += $(LDDEPS) -lX11 -lXrandr -lXcursor -lXinerama -lXi -lXxf86vm -lrt -lpthread -lGL -lglut -lGLU -lm
   EXTERNAL_LIBS      +=
-  LINKCMD             = $(CXX) -o $(TARGET) @$(TARGET).objects $(RESOURCES) $(ARCH) $(ALL_LDFLAGS) $(LIBS)
+  LINKCMD             = $(CXX) -o $(TARGET) $(OBJECTS) $(RESOURCES) $(ARCH) $(ALL_LDFLAGS) $(LIBS)
   OBJECTS := \
 	$(OBJDIR)/common/src/sockets.o \
 	$(OBJDIR)/dependencies/GLFW/src/context.o \
@@ -179,19 +179,19 @@ ifeq ($(config),release64)
   TARGETDIR           = bin
   TARGET              = $(TARGETDIR)/Client
   DEFINES            += -D__PLATFORM_LINUX__ -D_GLFW_X11 -D_GLFW_HAS_GLXGETPROCADDRESS -D_GLFW_GLX -D_GLFW_USE_OPENGL -DNDEBUG
-  INCLUDES           += -I"include" -I"dependencies" -I"dependencies/glew/include" -I"dependencies/GLFW/deps" -I"../common/include" -I"../../../../../usr/include/GL"
+  INCLUDES           += -Iinclude -Idependencies -Idependencies/glew/include -Idependencies/GLFW/deps -I../common/include -I/usr/include/GL
+  INCLUDES           +=
   ALL_CPPFLAGS       += $(CPPFLAGS) -MMD -MP -MP $(DEFINES) $(INCLUDES)
-  ALL_ASMFLAGS       += $(ASMFLAGS) $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -O2 -Wall -Wextra -m64
   ALL_CFLAGS         += $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -O2 -Wall -Wextra -m64
   ALL_CXXFLAGS       += $(CXXFLAGS) $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -O2 -Wall -Wextra -m64 -std=c++11
   ALL_OBJCFLAGS      += $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -O2 -Wall -Wextra -m64
   ALL_OBJCPPFLAGS    += $(CXXFLAGS) $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -O2 -Wall -Wextra -m64 -std=c++11
   ALL_RESFLAGS       += $(RESFLAGS) $(DEFINES) $(INCLUDES)
-  ALL_LDFLAGS        += $(LDFLAGS) -L../../../../../usr/bin -L../../../../../usr/lib -L. -s -m64
+  ALL_LDFLAGS        += $(LDFLAGS) -L/usr/bin -L/usr/lib -L. -s -m64
   LDDEPS             +=
   LIBS               += $(LDDEPS) -lX11 -lXrandr -lXcursor -lXinerama -lXi -lXxf86vm -lrt -lpthread -lGL -lglut -lGLU -lm
   EXTERNAL_LIBS      +=
-  LINKCMD             = $(CXX) -o $(TARGET) @$(TARGET).objects $(RESOURCES) $(ARCH) $(ALL_LDFLAGS) $(LIBS)
+  LINKCMD             = $(CXX) -o $(TARGET) $(OBJECTS) $(RESOURCES) $(ARCH) $(ALL_LDFLAGS) $(LIBS)
   OBJECTS := \
 	$(OBJDIR)/common/src/sockets.o \
 	$(OBJDIR)/dependencies/GLFW/src/context.o \
@@ -223,19 +223,19 @@ ifeq ($(config),debug32)
   TARGETDIR           = bin
   TARGET              = $(TARGETDIR)/Client
   DEFINES            += -D__PLATFORM_LINUX__ -D_GLFW_X11 -D_GLFW_HAS_GLXGETPROCADDRESS -D_GLFW_GLX -D_GLFW_USE_OPENGL -DDEBUG
-  INCLUDES           += -I"include" -I"dependencies" -I"dependencies/glew/include" -I"dependencies/GLFW/deps" -I"../common/include" -I"../../../../../usr/include/GL"
+  INCLUDES           += -Iinclude -Idependencies -Idependencies/glew/include -Idependencies/GLFW/deps -I../common/include -I/usr/include/GL
+  INCLUDES           +=
   ALL_CPPFLAGS       += $(CPPFLAGS) -MMD -MP -MP $(DEFINES) $(INCLUDES)
-  ALL_ASMFLAGS       += $(ASMFLAGS) $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -g -Wall -Wextra -m32
   ALL_CFLAGS         += $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -g -Wall -Wextra -m32
   ALL_CXXFLAGS       += $(CXXFLAGS) $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -g -Wall -Wextra -m32 -std=c++11
   ALL_OBJCFLAGS      += $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -g -Wall -Wextra -m32
   ALL_OBJCPPFLAGS    += $(CXXFLAGS) $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -g -Wall -Wextra -m32 -std=c++11
   ALL_RESFLAGS       += $(RESFLAGS) $(DEFINES) $(INCLUDES)
-  ALL_LDFLAGS        += $(LDFLAGS) -L../../../../../usr/bin -L../../../../../usr/lib -L. -m32
+  ALL_LDFLAGS        += $(LDFLAGS) -L/usr/bin -L/usr/lib -L. -m32
   LDDEPS             +=
   LIBS               += $(LDDEPS) -lX11 -lXrandr -lXcursor -lXinerama -lXi -lXxf86vm -lrt -lpthread -lGL -lglut -lGLU -lm
   EXTERNAL_LIBS      +=
-  LINKCMD             = $(CXX) -o $(TARGET) @$(TARGET).objects $(RESOURCES) $(ARCH) $(ALL_LDFLAGS) $(LIBS)
+  LINKCMD             = $(CXX) -o $(TARGET) $(OBJECTS) $(RESOURCES) $(ARCH) $(ALL_LDFLAGS) $(LIBS)
   OBJECTS := \
 	$(OBJDIR)/common/src/sockets.o \
 	$(OBJDIR)/dependencies/GLFW/src/context.o \
@@ -267,19 +267,19 @@ ifeq ($(config),release32)
   TARGETDIR           = bin
   TARGET              = $(TARGETDIR)/Client
   DEFINES            += -D__PLATFORM_LINUX__ -D_GLFW_X11 -D_GLFW_HAS_GLXGETPROCADDRESS -D_GLFW_GLX -D_GLFW_USE_OPENGL -DNDEBUG
-  INCLUDES           += -I"include" -I"dependencies" -I"dependencies/glew/include" -I"dependencies/GLFW/deps" -I"../common/include" -I"../../../../../usr/include/GL"
+  INCLUDES           += -Iinclude -Idependencies -Idependencies/glew/include -Idependencies/GLFW/deps -I../common/include -I/usr/include/GL
+  INCLUDES           +=
   ALL_CPPFLAGS       += $(CPPFLAGS) -MMD -MP -MP $(DEFINES) $(INCLUDES)
-  ALL_ASMFLAGS       += $(ASMFLAGS) $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -O2 -Wall -Wextra -m32
   ALL_CFLAGS         += $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -O2 -Wall -Wextra -m32
   ALL_CXXFLAGS       += $(CXXFLAGS) $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -O2 -Wall -Wextra -m32 -std=c++11
   ALL_OBJCFLAGS      += $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -O2 -Wall -Wextra -m32
   ALL_OBJCPPFLAGS    += $(CXXFLAGS) $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -O2 -Wall -Wextra -m32 -std=c++11
   ALL_RESFLAGS       += $(RESFLAGS) $(DEFINES) $(INCLUDES)
-  ALL_LDFLAGS        += $(LDFLAGS) -L../../../../../usr/bin -L../../../../../usr/lib -L. -s -m32
+  ALL_LDFLAGS        += $(LDFLAGS) -L/usr/bin -L/usr/lib -L. -s -m32
   LDDEPS             +=
   LIBS               += $(LDDEPS) -lX11 -lXrandr -lXcursor -lXinerama -lXi -lXxf86vm -lrt -lpthread -lGL -lglut -lGLU -lm
   EXTERNAL_LIBS      +=
-  LINKCMD             = $(CXX) -o $(TARGET) @$(TARGET).objects $(RESOURCES) $(ARCH) $(ALL_LDFLAGS) $(LIBS)
+  LINKCMD             = $(CXX) -o $(TARGET) $(OBJECTS) $(RESOURCES) $(ARCH) $(ALL_LDFLAGS) $(LIBS)
   OBJECTS := \
 	$(OBJDIR)/common/src/sockets.o \
 	$(OBJDIR)/dependencies/GLFW/src/context.o \
@@ -317,14 +317,12 @@ RESOURCES := \
 
 .PHONY: clean prebuild prelink
 
-all: $(OBJDIRS) $(TARGETDIR) prebuild prelink $(TARGET)
+all: $(OBJDIRS) prebuild prelink $(TARGET) | $(TARGETDIR)
 	@:
 
 $(TARGET): $(GCH) $(OBJECTS) $(LDDEPS) $(EXTERNAL_LIBS) $(RESOURCES) | $(TARGETDIR) $(OBJDIRS)
 	@echo Linking Client
-	$(file >$(TARGET).objects,$(OBJECTS))
 	$(SILENT) $(LINKCMD)
-	$(call RM,$(TARGET).objects)
 	$(POSTBUILDCMDS)
 
 $(TARGETDIR):
@@ -452,5 +450,4 @@ $(OBJDIR)/src/main.o: src/main.cpp $(GCH) $(MAKEFILE)
 -include $(OBJECTS:%.o=%.d)
 ifneq (,$(PCH))
   -include $(OBJDIR)/$(notdir $(PCH)).d
-  -include $(OBJDIR)/$(notdir $(PCH))_objc.d
 endif
