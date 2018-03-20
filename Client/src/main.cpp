@@ -406,6 +406,7 @@ void NetworkTask() {
       case NetworkState::NotConnected: {
         while (!success && !g_program_should_finish) {
           success = g_socket.connect("81.202.4.30", 14194);
+          // should reset success to false;
         }
 
         g_network_state = NetworkState::Connected;
@@ -414,6 +415,7 @@ void NetworkTask() {
       }
       case NetworkState::Connected: {
         g_network_state = NetworkState::Receiving;
+        printf("Connected!\n");
 
         break;
       }

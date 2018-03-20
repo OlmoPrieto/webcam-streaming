@@ -1,9 +1,10 @@
-#include <iostream>
+#include <atomic>
 #include <cassert>
 #include <cerrno>
 #include <csignal>
-#include <cstring>
 #include <cstdint>
+#include <cstring>
+#include <iostream>
 #include <thread>
 #include <vector>
 
@@ -23,11 +24,28 @@
 
 typedef uint8_t byte;
 
+enum class ProcessingState {
+  NotProcessing = 0,
+  Processing
+};
+
+enum class NetworkState {
+  NoPeerConnected = 0,
+  PeerConnected,
+  Sending
+};
+
 // GLOBAL VARIABLES
 struct v4l2_buffer g_bufferinfo;
 struct v4l2_format g_format;
 int32_t g_fd = -1;
 bool g_program_should_finish = false;
+std::atomic_flag g_can_read_data_buffer = false;
+std::atomic_flag g_can_send_data = false;
+
+ProcessingState g_processing_state = ProcessingState::NotProcessing;
+NetworkState g_network_state = NetworkState::NoPeerConnected;
+
 
 void InterruptSignalHandler(int32_t param) {
   g_program_should_finish = true;
@@ -53,15 +71,6 @@ void ProcessImage(byte* src_image, unsigned int src_size,
 
   printf("Pixels that differ: %u\n", count);
   printf("Time to process image: %.2fms\n", c.timeAsMilliseconds());
-}
-
-void InitializeNetwork(TCPListener* listener, TCPSocket* accepted_socket) {
-  listener->bind(14194);
-  listener->listen();
-
-  while (!accepted_socket) {
-    accepted_socket = listener->accept();
-  }
 }
 
 void SendData(TCPSocket* socket, byte* buffer, uint32_t buffer_size) {
@@ -234,15 +243,86 @@ void GrabCameraFrame(byte* target_buffer) {
 }
 
 
+void ProcessingTask(byte* read_copy_ptr, byte* process_ptr) {
+  while (!g_program_should_finish) {
+    if (g_processing_state == ProcessingState::NotProcessing) {
+      // CPU burner, better than using a mutex?
+      if (g_can_read_data_buffer == true) {
+        g_processing_state = ProcessingState::Processing;
+      }
+    }
+    else {
+      ProcessImage(read_copy_ptr, g_format.fmt.pix.sizeimage, 
+          process_ptr, g_format.fmt.pix.sizeimage, nullptr, 0);
+
+      g_can_read_data_buffer = false;
+      g_can_send_data = true; // NETWORK stuff
+      g_processing_state = ProcessingState::NotProcessing;
+    }
+  }
+}
+
+
+void NetworkTask(byte* send_ptr) {
+  TCPListener listener(Socket::Type::NonBlock, 128);
+  listener.bind(14194);
+  listener.listen();
+
+  TCPSocket* socket = nullptr;
+
+  bool success = false;
+  while (!g_program_should_finish) {
+    switch (g_network_state) {
+      case NetworkState::NoPeerConnected: {
+        while (!socket && !g_program_should_finish) {
+          socket = listener.accept();
+        }
+
+        g_network_state = NetworkState::PeerConnected;
+
+        break;
+      }
+
+      case NetworkState::PeerConnected: {
+        if (!socket->isConnected()) {
+          g_network_state = NetworkState::NoPeerConnected;
+        }
+        else if (g_can_send_data) {
+          g_network_state = NetworkState::Sending;
+        }
+
+        break;
+      }
+
+      case NetworkState::Sending: {
+        // if you could successfuly send the data, go back to the other state
+        //  however, if you couldn't send it, the socket may be in NonBlocking mode,
+        //  so you shouldn't change state and continue calling this function.
+        if (socket->sendData(send_ptr, g_format.fmt.pix.sizeimage)) {
+          g_can_send_data = false;
+          g_network_state = NetworkState::PeerConnected;
+        }
+
+        break;
+      }
+    }
+  }
+}
+
+
 int main(int argc, char** argv) {
   signal(SIGINT, InterruptSignalHandler);
-
-  // TCPListener listener(Socket::Type::NonBlock);
-  // listener.bind(14194);
-  // listener.listen();
   
+  byte* read_ptr      = nullptr;
+  byte* read_copy_ptr = nullptr;
+  byte* process_ptr   = nullptr;
+  byte* send_ptr      = nullptr;
+
+  std::thread network_thread(NetworkTask, send_ptr);
+  std::thread process_image_thread(ProcessingTask, read_copy_ptr, process_ptr);
+
   const char* device = (argc > 1) ? argv[1] : "/dev/video0";
-  InitializeVideoDevice(device);
+  //InitializeVideoDevice(device);
 
   byte* buffers[4] = {
     (byte*)malloc(g_format.fmt.pix.sizeimage),
@@ -250,48 +330,33 @@ int main(int argc, char** argv) {
     (byte*)malloc(g_format.fmt.pix.sizeimage),
     (byte*)malloc(g_format.fmt.pix.sizeimage)
   };
-  byte* read_ptr      = buffers[0];
-  byte* read_copy_ptr = buffers[1];
-  byte* process_ptr   = buffers[2];
-  byte* send_ptr      = buffers[3];
+  read_ptr      = buffers[0];
+  read_copy_ptr = buffers[1];
+  process_ptr   = buffers[2];
+  send_ptr      = buffers[3];
 
-  EnableVideoStreaming();
-
-  TCPListener listener(Socket::Type::NonBlock, 128);
-  TCPSocket* socket = nullptr;
-  InitializeNetwork(&listener, socket);
+  //EnableVideoStreaming();
 
   /* MAIN LOOP */
   uint32_t index = 0;
   while (g_program_should_finish == false) {
     memcpy(read_copy_ptr, read_ptr, g_format.fmt.pix.sizeimage);
+    g_can_read_data_buffer = true;
 
-    // std::thread(ProcessImage, read_ptr, g_format.fmt.pix.sizeimage, 
-    //   process_ptr, g_format.fmt.pix.sizeimage, nullptr, 0);
-    uint32_t image_size = g_format.fmt.pix.sizeimage;
-    std::thread process_image_thread(
-      [read_copy_ptr, image_size, process_ptr]() {
-        ProcessImage(read_copy_ptr, image_size, 
-          process_ptr, image_size, nullptr, 0);
-      }
-    );
-    // std::thread(SendData, ...);
-    std::thread send_data_thread(
-      [socket, send_ptr, image_size]() {
-        SendData(socket, send_ptr, image_size);
-      }
-    );
+    // uint32_t image_size = g_format.fmt.pix.sizeimage;
+    // std::thread process_image_thread(
+    //   [read_copy_ptr, image_size, process_ptr]() {
+    //     ProcessImage(read_copy_ptr, image_size, 
+    //       process_ptr, image_size, nullptr, 0);
+    //   }
+    // );
 
-    GrabCameraFrame(read_ptr);
-
-    // TODO: capture if Ctrl+C is called to wait for threads to finish
-    // TODO: capture if Ctrl+C is called to wait for threads to finish
-    // TODO: capture if Ctrl+C is called to wait for threads to finish
-    // TODO: capture if Ctrl+C is called to wait for threads to finish
+    //GrabCameraFrame(read_ptr);
 
     // sync point
+    // TODO: make this blockless by reusing std::atomic_flags from both threads
     process_image_thread.join();
-    send_data_thread.join();
+    network_thread.join();
 
     read_ptr      = buffers[(index) % 3];
     read_copy_ptr = buffers[(index + 1) % 3];
@@ -299,23 +364,11 @@ int main(int argc, char** argv) {
     send_ptr      = buffers[(index + 3) % 3];
     ++index;
     if (index > 1000000) {
+      // to avoid overflows in long executions
       index = 0;
     }
   }
   /* \MAIN LOOP */
-   
-  
-  // printf("Image size: %d bytes\n", bufferinfo.length);
-  // // save to file
-  // int jpgfile = open("/home/pi/Desktop/image.jpeg", O_WRONLY | O_CREAT, 0660);
-  // if (jpgfile < 0) {
-  //   perror("Open");
-  //   return 1;
-  // }
-
-  // write(jpgfile, buffer, bufferinfo.length);
-  // close(jpgfile);
-  // // save to file
 
   close(g_fd);
 

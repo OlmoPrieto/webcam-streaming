@@ -49,6 +49,7 @@ public:
   bool sendData(byte* buffer, uint32_t buffer_size);
   uint32_t receiveData(byte* buffer, uint32_t max_size_to_read);
   bool close();
+  bool isConnected() const;
 
 private:
   friend class TCPListener;

@@ -111,7 +111,9 @@ bool TCPSocket::connect(const char* ip, uint32_t port) {
     }
   }
   else {
-    printf("Socket already connected\n");
+    printf("Socket already connected, resetting...\n");
+    close();
+    construct(type);
   }
 
   return connection_status == ConnectionStatus::Connected;
@@ -135,6 +137,13 @@ bool TCPSocket::sendData(byte* buffer, uint32_t buffer_size) {
           }
           case EPIPE: {
             printf("The connection was closed\n");
+
+            break;
+          }
+          case ECONNRESET: {
+            // close();
+            // construct(type);  // This sets connection_status to ConnectionStatus::Disconnected
+            connection_status = ConnectionStatus::Disconnected;
 
             break;
           }
@@ -203,6 +212,13 @@ uint32_t TCPSocket::receiveData(byte* buffer, uint32_t max_size_to_read) {
           //case EAGAIN:  // looks like in MacOSX the following is defined: #define EWOULDBLOCK EAGAIN
           case EWOULDBLOCK: {
             receiving_status = ReceivingStatus::Receiving;
+
+            break;
+          }
+          case ECONNRESET: {
+            // close();
+            // construct(type);
+            connection_status = ConnectionStatus::Disconnected;
 
             break;
           }
@@ -288,6 +304,10 @@ bool TCPSocket::close() {
   closed = result;
 
   return result;
+}
+
+bool TCPSocket::isConnected() const {
+  return connection_status == ConnectionStatus::Connected;
 }
   
 /*private*/TCPSocket::TCPSocket(Type type, uint32_t descriptor) {
