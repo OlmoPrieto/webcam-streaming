@@ -396,6 +396,9 @@ int main(int argc, char** argv) {
 
   close(g_fd);
 
+  network_thread.join();
+  process_image_thread.join();
+
   //free(buffer);
 
   free(buffers[0]);
