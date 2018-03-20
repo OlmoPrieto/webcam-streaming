@@ -42,6 +42,10 @@ int32_t g_fd = -1;
 bool g_program_should_finish = false;
 std::atomic<bool> g_can_read_data_buffer;
 std::atomic<bool> g_can_send_data;
+std::atomic<bool> g_can_sync_processing;
+std::atomic<bool> g_can_sync_network;
+std::atomic<bool> g_can_start_processing;
+std::atomic<bool> g_can_start_network;
 
 ProcessingState g_processing_state = ProcessingState::NotProcessing;
 NetworkState g_network_state = NetworkState::NoPeerConnected;
@@ -245,19 +249,30 @@ void GrabCameraFrame(byte* target_buffer) {
 
 void ProcessingTask(byte* read_copy_ptr, byte* process_ptr) {
   while (!g_program_should_finish) {
-    if (g_processing_state == ProcessingState::NotProcessing) {
-      // CPU burner, better than using a mutex?
-      if (g_can_read_data_buffer == true) {
-        g_processing_state = ProcessingState::Processing;
+    if (g_can_start_processing == true) {
+      g_can_start_processing = false;
+
+      switch (g_processing_state) {
+        case ProcessingState::NotProcessing: {
+          if (g_can_read_data_buffer == true) {
+            g_processing_state = ProcessingState::Processing;
+          }
+
+          break;
+        }
+        case ProcessingState::Processing: {
+          ProcessImage(read_copy_ptr, g_format.fmt.pix.sizeimage, 
+              process_ptr, g_format.fmt.pix.sizeimage, nullptr, 0);
+
+          g_can_read_data_buffer = false;
+          g_can_send_data = true; // NETWORK stuff
+          g_processing_state = ProcessingState::NotProcessing;
+
+          break;
+        }
       }
-    }
-    else {
-      ProcessImage(read_copy_ptr, g_format.fmt.pix.sizeimage, 
-          process_ptr, g_format.fmt.pix.sizeimage, nullptr, 0);
-      printf("EEEOO\n");
-      g_can_read_data_buffer = false;
-      g_can_send_data = true; // NETWORK stuff
-      g_processing_state = ProcessingState::NotProcessing;
+
+      g_can_sync_processing = true;
     }
   }
 }
@@ -272,40 +287,46 @@ void NetworkTask(byte* send_ptr) {
 
   bool success = false;
   while (!g_program_should_finish) {
-    switch (g_network_state) {
-      case NetworkState::NoPeerConnected: {
-        while (!socket && !g_program_should_finish) {
-          socket = listener.accept();
-        }
+    if (g_can_start_network == true) {
+      g_can_start_network = false;
 
-        g_network_state = NetworkState::PeerConnected;
+      switch (g_network_state) {
+        case NetworkState::NoPeerConnected: {
+          while (!socket && !g_program_should_finish) {
+            socket = listener.accept();
+          }
 
-        break;
-      }
-
-      case NetworkState::PeerConnected: {
-        if (!socket->isConnected()) {
-          g_network_state = NetworkState::NoPeerConnected;
-        }
-        else if (g_can_send_data) {
-          g_network_state = NetworkState::Sending;
-        }
-
-        break;
-      }
-
-      case NetworkState::Sending: {
-        // if you could successfuly send the data, go back to the other state
-        //  however, if you couldn't send it, the socket may be in NonBlocking mode,
-        //  so you shouldn't change state and continue calling this function.
-        if (socket->sendData(send_ptr, g_format.fmt.pix.sizeimage)) {
-          g_can_send_data = false;
           g_network_state = NetworkState::PeerConnected;
+
+          break;
         }
 
-        break;
-      }
-    }
+        case NetworkState::PeerConnected: {
+          if (!socket->isConnected()) {
+            g_network_state = NetworkState::NoPeerConnected;
+          }
+          else if (g_can_send_data) {
+            g_network_state = NetworkState::Sending;
+          }
+
+          break;
+        }
+
+        case NetworkState::Sending: {
+          // if you could successfuly send the data, go back to the other state
+          //  however, if you couldn't send it, the socket may be in NonBlocking mode,
+          //  so you shouldn't change state and continue calling this function.
+          if (socket->sendData(send_ptr, g_format.fmt.pix.sizeimage)) {
+            g_can_send_data = false;
+            g_network_state = NetworkState::PeerConnected;
+          }
+
+          break;
+        }
+      } // switch
+
+      g_can_sync_network = true;
+    } // g_can_start_network == true
   }
 }
 
@@ -344,32 +365,29 @@ int main(int argc, char** argv) {
     c.start();
 
     memcpy(read_copy_ptr, read_ptr, g_format.fmt.pix.sizeimage);
+    g_can_start_processing = true;
     g_can_read_data_buffer = true;
-
-    // uint32_t image_size = g_format.fmt.pix.sizeimage;
-    // std::thread process_image_thread(
-    //   [read_copy_ptr, image_size, process_ptr]() {
-    //     ProcessImage(read_copy_ptr, image_size, 
-    //       process_ptr, image_size, nullptr, 0);
-    //   }
-    // );
+    g_can_start_network = true;
 
     //GrabCameraFrame(read_ptr);
 
     // sync point
-    // TODO: make this blockless by reusing std::atomic_flags from both threads
-    process_image_thread.join();
-    network_thread.join();
+    if (g_can_sync_processing == true && g_can_sync_network == true) {
+      g_can_sync_processing = false;
+      g_can_sync_network = false;
 
-    read_ptr      = buffers[(index) % 3];
-    read_copy_ptr = buffers[(index + 1) % 3];
-    process_ptr   = buffers[(index + 2) % 3];
-    send_ptr      = buffers[(index + 3) % 3];
-    ++index;
-    if (index > 1000000) {
-      // to avoid overflows in long executions
-      index = 0;
+      read_ptr      = buffers[(index) % 3];
+      read_copy_ptr = buffers[(index + 1) % 3];
+      process_ptr   = buffers[(index + 2) % 3];
+      send_ptr      = buffers[(index + 3) % 3];
+      ++index;
+      if (index > 1000000) {
+        // to avoid overflows in long executions
+        index = 0;
+      }
     }
+
+
 
     c.stop();
     printf("Frame time: %.2fms\n", c.timeAsMilliseconds());

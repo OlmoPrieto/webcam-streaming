@@ -1,3 +1,4 @@
+#include <atomic>
 #include <csignal>
 #include <cstdint>
 #include <cstring>
@@ -48,6 +49,7 @@ byte* g_draw_buffer = nullptr;
 
 TCPSocket g_socket(Socket::Type::NonBlock);
 NetworkState g_network_state = NetworkState::NotConnected;
+std::atomic<bool> g_can_sync_network;
 
 
 class Mat4 {
@@ -401,6 +403,7 @@ void NetworkTask() {
   g_recv_data_ptr = g_recv_data_buffer;
 
   bool success = false;
+  bool ignore_sync_flag = false;
   while (!g_program_should_finish) {
     switch (g_network_state) {
       case NetworkState::NotConnected: {
@@ -422,8 +425,18 @@ void NetworkTask() {
       case NetworkState::Receiving: {
         uint32_t read_bytes = g_socket.receiveData(g_recv_data_ptr, g_image_width * g_image_height * 4);
       
+        if (read_bytes == 0) {
+          g_can_sync_network = false;
+          ignore_sync_flag = true;
+        }
+
         break;
       }
+    }
+
+    if (!ignore_sync_flag) {
+      ignore_sync_flag = false;
+      g_can_sync_network = true;
     }
   }
 
@@ -470,9 +483,10 @@ int main() {
     // Swap between drawing buffer and the received buffer by network.
     // Only start to sync when the program is connected to the server, 
     //  because otherwise the program could be hung.
-    if (g_network_state != NetworkState::NotConnected) {
-      printf("Joining...\n");
-      network_thread.join();
+    if (g_can_sync_network == true && g_network_state != NetworkState::NotConnected) {
+      printf("Waiting for network to end frame...\n");
+      //network_thread.join();
+      g_can_sync_network = false;
       if (g_draw_buffer_ptr == g_draw_buffer) {
         g_draw_buffer_ptr = g_recv_data_buffer;
       }
