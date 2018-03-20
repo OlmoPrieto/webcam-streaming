@@ -40,8 +40,8 @@ struct v4l2_buffer g_bufferinfo;
 struct v4l2_format g_format;
 int32_t g_fd = -1;
 bool g_program_should_finish = false;
-std::atomic_flag g_can_read_data_buffer = false;
-std::atomic_flag g_can_send_data = false;
+std::atomic<bool> g_can_read_data_buffer;
+std::atomic<bool> g_can_send_data;
 
 ProcessingState g_processing_state = ProcessingState::NotProcessing;
 NetworkState g_network_state = NetworkState::NoPeerConnected;
@@ -254,7 +254,7 @@ void ProcessingTask(byte* read_copy_ptr, byte* process_ptr) {
     else {
       ProcessImage(read_copy_ptr, g_format.fmt.pix.sizeimage, 
           process_ptr, g_format.fmt.pix.sizeimage, nullptr, 0);
-
+      printf("EEEOO\n");
       g_can_read_data_buffer = false;
       g_can_send_data = true; // NETWORK stuff
       g_processing_state = ProcessingState::NotProcessing;
@@ -338,8 +338,11 @@ int main(int argc, char** argv) {
   //EnableVideoStreaming();
 
   /* MAIN LOOP */
+  Chrono c;
   uint32_t index = 0;
   while (g_program_should_finish == false) {
+    c.start();
+
     memcpy(read_copy_ptr, read_ptr, g_format.fmt.pix.sizeimage);
     g_can_read_data_buffer = true;
 
@@ -367,6 +370,9 @@ int main(int argc, char** argv) {
       // to avoid overflows in long executions
       index = 0;
     }
+
+    c.stop();
+    printf("Frame time: %.2fms\n", c.timeAsMilliseconds());
   }
   /* \MAIN LOOP */
 
