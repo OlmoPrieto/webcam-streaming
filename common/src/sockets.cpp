@@ -4,7 +4,7 @@
 #include <cerrno>
 #include <cstdio>
 
-#define IGNORE_PRINTF 0
+#define IGNORE_PRINTF 1
 #if IGNORE_PRINTF == 1
   #define printf(fmt, ...) (0)
 #endif

@@ -1,5 +1,8 @@
-#include <iostream>
+#include <csignal>
+#include <cstdint>
 #include <cstring>
+#include <iostream>
+#include <thread>
 
 #include "chrono.h"
 #include "sockets.h"
@@ -13,6 +16,39 @@
 #include <GLFW/include/glfw3.h>
 
 typedef unsigned char byte;
+
+enum class NetworkState {
+  NotConnected = 0,
+  Connected = 1,
+  Receiving = 2
+};
+
+// GLOBAL VARIABLES
+GLFWwindow* g_window = nullptr;
+//byte* g_data = nullptr;
+uint32_t g_window_width = 640;
+uint32_t g_window_height = 480;
+uint32_t g_image_width = 640;
+uint32_t g_image_height = 480;
+bool g_program_should_finish = false;
+
+GLuint g_vao_id = 0;
+GLuint g_vertex_buffer_id = 0;
+GLuint g_other_vertex_shader_id = 0;
+GLuint g_vertex_shader_id = 0;
+GLuint g_fragment_shader_id = 0;
+GLuint g_program_id = 0;
+GLuint g_uvs_id = 0;
+GLuint g_texture_id = 0;
+
+byte* g_recv_data_ptr = nullptr;
+byte* g_recv_data_buffer = nullptr;
+byte* g_draw_buffer_ptr = nullptr;
+byte* g_draw_buffer = nullptr;
+
+TCPSocket g_socket(Socket::Type::NonBlock);
+NetworkState g_network_state = NetworkState::NotConnected;
+
 
 class Mat4 {
 public:
@@ -76,9 +112,15 @@ static float fov = 60.0f;
 static float near = 0.1f;
 static float far = 1000.0f;
 
+void InterruptSignalHandler(int32_t param) {
+  glfwSetWindowShouldClose(g_window, true);
+  g_program_should_finish = true;
+}
+
 static void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
   if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
     glfwSetWindowShouldClose(window, true);
+    g_program_should_finish = true;
   }
 }
 
@@ -102,18 +144,6 @@ static const char* fragment_shader_text =
 "  //color = vec4(o_uv.x, o_uv.y, 0.0, 1.0);\n"
 "  color = vec4(texture(target_texture, o_uv).rgb, 1.0);\n"
 "}\n";
-
-// static const char* vertex_shader_text = 
-// "uniform mat4 MVP;\n"
-// "attribute vec3 position;\n"
-// "void main() {\n"
-// "  gl_Position = MVP * vec4(position, 1.0);\n"
-// "}\n";
-
-// static const char* fragment_shader_text = 
-// "void main() {\n"
-// "  gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);\n"
-// "}\n";
 
 bool CheckGLError(const char* tag = "") {
   GLenum error = glGetError();
@@ -151,65 +181,48 @@ bool CheckGLError(const char* tag = "") {
   return error != GL_NO_ERROR;
 }
 
-int main() {
-  TCPSocket socket(Socket::Type::NonBlock);
-  bool success = false;
-  while (!success) {
-    success = socket.connect("127.0.0.1", 14194);
-    //success = socket.connect("81.202.4.30", 14194);
-    //printf("Trying to connect...\n");
-  }
-  uint32_t buffer_size = 600000;
-  byte* data = (byte*)malloc(buffer_size);
-  memset(data, 2, buffer_size);
-  socket.sendData(data, buffer_size);
-
-  // while (true) {
-
-  // }
-  printf("Data sent\n");
-
-  return 0;
-}
-
-int _main_() {
+void InitializeGraphics() {
+  printf("Initializing graphic context...\n");
 
   if (!glfwInit()) {
     printf("Failed to initialize GLFW\n");
-    return 1;
+    exit(1);
   }
 
-   glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
-   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+  glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+  glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
+  glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
   #ifdef __PLATFORM_MACOSX__
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
   #endif
 
-  GLFWwindow* window = glfwCreateWindow(640, 480, "Window", NULL, NULL);
-  if (!window) {
+  g_window = glfwCreateWindow(g_window_width, g_window_height, "Window", NULL, NULL);
+  if (!g_window) {
     glfwTerminate();
     printf("Failed to create window\n");
-    return 1;
+    exit(1);
   }
 
-  glfwMakeContextCurrent(window);
-  //glfwSwapInterval(0);
-  glfwSetKeyCallback(window, KeyCallback);
+  glfwMakeContextCurrent(g_window);
+  //glfwSwapInterval(0); // comment/uncomment to enable/disable 'vsync'
+  glfwSetKeyCallback(g_window, KeyCallback);
 
   #ifdef __PLATFORM_LINUX__
     glewInit();
   #endif
+}
 
-  // OpenGL stuff
+void InitializeOpenGLStuff() {
+  printf("Initializing OpenGL...\n");
+
   GLenum error = GL_NO_ERROR;
   printf("GL_NO_ERROR code: %d\n", error);
 
-  GLuint vao;
-  glGenVertexArrays(1, &vao);
-  glBindVertexArray(vao);
+  //GLuint vao;
+  glGenVertexArrays(1, &g_vao_id);
+  glBindVertexArray(g_vao_id);
   
-  GLuint vertex_buffer_id;
+  //GLuint vertex_buffer_id;
   struct Vertex {
     float x, y, z;
   };
@@ -221,66 +234,66 @@ int _main_() {
     {  0.9f, -0.9f, 0.0f },
     {  0.9f,  0.9f, 0.0f }
   };
-  glGenBuffers(1, &vertex_buffer_id);
-  glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer_id);
+  glGenBuffers(1, &g_vertex_buffer_id);
+  glBindBuffer(GL_ARRAY_BUFFER, g_vertex_buffer_id);
   glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
   glBindBuffer(GL_ARRAY_BUFFER, 0);
 
-  GLuint other_vertex_shader_id = glCreateShader(GL_VERTEX_SHADER);
+  GLuint g_other_vertex_shader_id = glCreateShader(GL_VERTEX_SHADER);
   CheckGLError("glCreateShader vertex 2");
 
-  GLuint vertex_shader_id = glCreateShader(GL_VERTEX_SHADER);
+  g_vertex_shader_id = glCreateShader(GL_VERTEX_SHADER);
   CheckGLError("glCreateShader vertex");
-  glShaderSource(vertex_shader_id, 1, &vertex_shader_text, NULL);
+  glShaderSource(g_vertex_shader_id, 1, &vertex_shader_text, NULL);
   CheckGLError("glShaderSource vertex");
-  glCompileShader(vertex_shader_id);
+  glCompileShader(g_vertex_shader_id);
   CheckGLError("glCompileShader vertex");
   GLint vertex_shader_compiling_success = 0;
-  glGetShaderiv(vertex_shader_id, GL_COMPILE_STATUS, &vertex_shader_compiling_success);
+  glGetShaderiv(g_vertex_shader_id, GL_COMPILE_STATUS, &vertex_shader_compiling_success);
   if (!vertex_shader_compiling_success) {
     printf("Failed to compile vertex shader\n");
     GLint log_size = 0;
-    glGetShaderiv(vertex_shader_id, GL_INFO_LOG_LENGTH, &log_size);
+    glGetShaderiv(g_vertex_shader_id, GL_INFO_LOG_LENGTH, &log_size);
     char* log = (char*)malloc(log_size);
     GLint read = 0;
-    glGetShaderInfoLog(vertex_shader_id, log_size, &read, log);
+    glGetShaderInfoLog(g_vertex_shader_id, log_size, &read, log);
     printf("Error: %s\n", log);
     free(log);
   }
 
-  GLuint fragment_shader_id = glCreateShader(GL_FRAGMENT_SHADER);
-  glShaderSource(fragment_shader_id, 1, &fragment_shader_text, NULL);
-  glCompileShader(fragment_shader_id);
+  g_fragment_shader_id = glCreateShader(GL_FRAGMENT_SHADER);
+  glShaderSource(g_fragment_shader_id, 1, &fragment_shader_text, NULL);
+  glCompileShader(g_fragment_shader_id);
   CheckGLError("glCompileShader fragment");
   GLint fragment_shader_compiling_success = 0;
-  glGetShaderiv(fragment_shader_id, GL_COMPILE_STATUS, &fragment_shader_compiling_success);
+  glGetShaderiv(g_fragment_shader_id, GL_COMPILE_STATUS, &fragment_shader_compiling_success);
   if (!fragment_shader_compiling_success) {
     printf("Failed to compile fragment shader\n");
     GLint log_size = 0;
-    glGetShaderiv(fragment_shader_id, GL_INFO_LOG_LENGTH, &log_size);
+    glGetShaderiv(g_fragment_shader_id, GL_INFO_LOG_LENGTH, &log_size);
     char* log = (char*)malloc(log_size);
     GLint read = 0;
-    glGetShaderInfoLog(fragment_shader_id, log_size, &read, log);
+    glGetShaderInfoLog(g_fragment_shader_id, log_size, &read, log);
     printf("Error: %s\n", log);
     free(log);
   }
 
-  GLuint program_id = glCreateProgram();
-  glAttachShader(program_id, vertex_shader_id);
-  glAttachShader(program_id, fragment_shader_id);
-  glLinkProgram(program_id);
+  GLuint g_program_id = glCreateProgram();
+  glAttachShader(g_program_id, g_vertex_shader_id);
+  glAttachShader(g_program_id, g_fragment_shader_id);
+  glLinkProgram(g_program_id);
   CheckGLError("glLinkProgram");
 
-  GLint mvp_location = glGetUniformLocation(program_id, "MVP");
-  GLint position_location = glGetAttribLocation(program_id, "position");
+  GLint mvp_location = glGetUniformLocation(g_program_id, "MVP");
+  GLint position_location = glGetAttribLocation(g_program_id, "position");
 
-  glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer_id);
+  glBindBuffer(GL_ARRAY_BUFFER, g_vertex_buffer_id);
   glEnableVertexAttribArray(position_location);
   CheckGLError("glEnableVertexAttribArray 1");
   glVertexAttribPointer(position_location, 3, GL_FLOAT, GL_FALSE, 0, 0);
   CheckGLError("glVertexAttribPointer 1");
 
-  GLuint uvs_id;
+  //GLuint g_uvs_id;
   struct UV {
     float u, v;
   };
@@ -292,38 +305,38 @@ int _main_() {
     {  1.0f, -1.0f },
     {  1.0f,  1.0f }
   };
-  glGenBuffers(1, &uvs_id);
-  glBindBuffer(GL_ARRAY_BUFFER, uvs_id);
+  glGenBuffers(1, &g_uvs_id);
+  glBindBuffer(GL_ARRAY_BUFFER, g_uvs_id);
   glBufferData(GL_ARRAY_BUFFER, sizeof(uvs), uvs, GL_STATIC_DRAW);
 
-  GLint uvs_location = glGetAttribLocation(program_id, "uv");
+  GLint uvs_location = glGetAttribLocation(g_program_id, "uv");
   glEnableVertexAttribArray(uvs_location);
   CheckGLError("glEnableVertexAttribArray 2");
   glVertexAttribPointer(uvs_location, 2, GL_FLOAT, GL_FALSE, 0, 0);
   CheckGLError("glVertexAttribPointer 2");
 
-  GLuint texture_id;
-  glGenTextures(1, &texture_id);
+  //GLuint texture_id;
+  glGenTextures(1, &g_texture_id);
   CheckGLError("glGenTextures");
-  glBindTexture(GL_TEXTURE_2D, texture_id);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);	
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-  byte* data = (byte*)malloc(640*480*4);
-  if (!data) {
-  	printf("Error allocating memory\n");
+  glBindTexture(GL_TEXTURE_2D, g_texture_id);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT); 
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  g_draw_buffer = (byte*)malloc(g_image_width * g_image_height * 4);
+  if (!g_draw_buffer) {
+    printf("Error allocating memory\n");
   }
-  byte* ptr = data;
-  memset(ptr, 0, 640*480*4);
-  // for (unsigned int i = 0; i < 640 * 480; i++) {
-  // 	*ptr = 0xFF;
-  // 	// *(ptr+1) = 0xFF;
-  // 	// *(ptr+2) = 0x00;
-  // 	ptr += 3;
+  g_draw_buffer_ptr = g_draw_buffer;
+  memset(g_draw_buffer_ptr, 0, g_image_width * g_image_height * 4);
+  // for (unsigned int i = 0; i < g_image_width * g_image_height; i++) {
+  //  *ptr = 0xFF;
+  //  // *(ptr+1) = 0xFF;
+  //  // *(ptr+2) = 0x00;
+  //  ptr += 3;
   // }
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 640, 480, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
-
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, g_image_width, g_image_height, 
+    0, GL_RGBA, GL_UNSIGNED_BYTE, g_draw_buffer);
 
   Mat4 m, p, mvp;
   m.setIdentity();
@@ -333,7 +346,8 @@ int _main_() {
   float top    =  1.0f;
   float bottom = -1.0f;
 
-  // column-major order
+  // Projection matrix (ortographic)
+  //  column-major order
   p.matrix[0] = 2.0f / (right - left);
   p.matrix[1] = 0.0f;
   p.matrix[2] = 0.0f;
@@ -354,47 +368,131 @@ int _main_() {
   p.matrix[14] = 0.0f;
   p.matrix[15] = 1.0f;
 
-  glUseProgram(program_id);
+  glUseProgram(g_program_id);
   glUniformMatrix4fv(mvp_location, 1, GL_FALSE, (const GLfloat*)p.matrix);
+}
 
-  unsigned int indices[6] = { 0, 1, 2, 3, 4, 5 };
+
+int _main_() {
+  TCPSocket socket(Socket::Type::NonBlock);
+  bool success = false;
+  while (!success) {
+    success = socket.connect("127.0.0.1", 14194);
+    //success = socket.connect("81.202.4.30", 14194);
+    //printf("Trying to connect...\n");
+  }
+  uint32_t buffer_size = 600000;
+  byte* data = (byte*)malloc(buffer_size);
+  memset(data, 2, buffer_size);
+  socket.sendData(data, buffer_size);
+
+  // while (true) {
+
+  // }
+  printf("Data sent\n");
+
+  return 0;
+}
+
+void NetworkTask() {
+  printf("Initializing network...\n");
+
+  g_recv_data_buffer = (byte*)malloc(g_image_width * g_image_height * 4);
+  g_recv_data_ptr = g_recv_data_buffer;
+
+  bool success = false;
+  while (!g_program_should_finish) {
+    switch (g_network_state) {
+      case NetworkState::NotConnected: {
+        while (!success && !g_program_should_finish) {
+          success = g_socket.connect("81.202.4.30", 14194);
+        }
+
+        g_network_state = NetworkState::Connected;
+
+        break;
+      }
+      case NetworkState::Connected: {
+        g_network_state = NetworkState::Receiving;
+
+        break;
+      }
+      case NetworkState::Receiving: {
+        uint32_t read_bytes = g_socket.receiveData(g_recv_data_ptr, g_image_width * g_image_height * 4);
+      
+        break;
+      }
+    }
+  }
+
+  g_socket.close();
+}
+
+int main() {
+  signal(SIGINT, InterruptSignalHandler);
+
+  std::thread network_thread(NetworkTask);
+
+  InitializeGraphics();
+  InitializeOpenGLStuff();
+
   byte r = 0;
   byte g = 64;
   byte b = 128;
   Chrono c;
-  while (!glfwWindowShouldClose(window)) {
+  while (!glfwWindowShouldClose(g_window)) {
   	c.start();
     glClear(GL_COLOR_BUFFER_BIT);
 
-    byte* ptr = data;
-	  memset(ptr, 0, 640*480*4);
-	  for (unsigned int i = 0; i < 640 * 480; i++) {
-	  	*ptr = r;
-	  	*(ptr+1) = g;
-	  	*(ptr+2) = b;
-	  	*(ptr+3) = 255;
+    byte* ptr = g_draw_buffer;
+	  memset(ptr, 0, g_image_width * g_image_height * 4);
+	  for (unsigned int i = 0; i < g_image_width * g_image_height; i++) {
+	  	*ptr      = r;
+	  	*(ptr+1)  = g;
+	  	*(ptr+2)  = b;
+	  	*(ptr+3)  = 255;
 	  	ptr += 4;
 	  }
 	  r++; g++; b++;
 	  r %= 255; g %= 255; b %= 255;
 	  glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 
-	  	640, 480, GL_RGBA, GL_UNSIGNED_BYTE, data);
+	  	g_image_width, g_image_height, GL_RGBA, GL_UNSIGNED_BYTE, g_draw_buffer_ptr);
 
     glDrawArrays(GL_TRIANGLES, 0, 6);
-    //glDrawElements(GL_LINES, 1, GL_UNSIGNED_INT, indices);
     //CheckGLError("glDrawArrays");
 
     c.stop();
     printf("Frame time: %.2f ms\n", c.timeAsMilliseconds());
 
-    glfwSwapBuffers(window);
+    // Sync point
+    // Swap between drawing buffer and the received buffer by network.
+    // Only start to sync when the program is connected to the server, 
+    //  because otherwise the program could be hung.
+    if (g_network_state != NetworkState::NotConnected) {
+      printf("Joining...\n");
+      network_thread.join();
+      if (g_draw_buffer_ptr == g_draw_buffer) {
+        g_draw_buffer_ptr = g_recv_data_buffer;
+      }
+      else {
+        g_draw_buffer_ptr = g_draw_buffer;
+      }
+    }
+
+    glfwSwapBuffers(g_window);
     glfwPollEvents();
   }
 
-  if (data) {
-  	free(data);
+  // CLEANUP
+  network_thread.join();
+
+  if (g_draw_buffer) {
+    free(g_draw_buffer);
   }
-  glfwDestroyWindow(window);
+  if (g_recv_data_buffer) {
+    free(g_recv_data_buffer);
+  }
+  glfwDestroyWindow(g_window);
   glfwTerminate();
 
   return 0;

@@ -234,10 +234,7 @@ void GrabCameraFrame(byte* target_buffer) {
 }
 
 
-
-
 int main(int argc, char** argv) {
-
   signal(SIGINT, InterruptSignalHandler);
 
   // TCPListener listener(Socket::Type::NonBlock);
@@ -301,6 +298,9 @@ int main(int argc, char** argv) {
     process_ptr   = buffers[(index + 2) % 3];
     send_ptr      = buffers[(index + 3) % 3];
     ++index;
+    if (index > 1000000) {
+      index = 0;
+    }
   }
   /* \MAIN LOOP */
    
