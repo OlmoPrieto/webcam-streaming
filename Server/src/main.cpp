@@ -333,8 +333,38 @@ void NetworkTask(byte* send_ptr) {
   }
 }
 
+int main() {
+	TCPListener listener(Socket::Type::NonBlock);
+	listener.bind(14194);
+	listener.listen();
 
-int main(int argc, char** argv) {
+	TCPSocket* socket = nullptr;
+	while (socket == nullptr) {
+		socket = listener.accept();
+	}
+	printf("Accepted connection\n");
+
+	byte i = 1;
+	while (i < 255) {
+		byte buffer[1024];
+		memset(buffer, 0, 1024);
+		buffer[1] = i;
+		while (!socket->sendData(buffer, 1024)) {
+			//printf("Data sent successfuly\n");
+			printf("Big trouble %u", i);
+		}
+		//else {
+			//printf("Data sent wrong\n");
+		//}
+		printf("Data sent successfuly %u\n", i);
+
+		++i;
+	}
+
+	return 0;
+}
+
+int __main(int argc, char** argv) {
   signal(SIGINT, InterruptSignalHandler);
   
   byte* read_ptr      = nullptr;

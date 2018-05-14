@@ -4,7 +4,7 @@
 #include <cerrno>
 #include <cstdio>
 
-#define IGNORE_PRINTF 1
+#define IGNORE_PRINTF 0
 #if IGNORE_PRINTF == 1
   #define printf(fmt, ...) (0)
 #endif
@@ -157,6 +157,7 @@ bool TCPSocket::sendData(byte* buffer, uint32_t buffer_size) {
     }
   }
   else if (sending_status == SendingStatus::Sending) {
+    printf("Sending...\n");
     fd_set sock_des;
     memset(&sock_des, 0, sizeof(sock_des));
     FD_ZERO(&sock_des);
@@ -246,6 +247,7 @@ uint32_t TCPSocket::receiveData(byte* buffer, uint32_t max_size_to_read) {
     //timeout.tv_usec = 1;
     errno = 0;
     status = select(socket_descriptor + 1, nullptr, &sock_des, nullptr, &timeout);  // CAREFUL: need to ask for fds than can be WRITTEN, not READABLE
+    //status = select(socket_descriptor + 1, &sock_des, nullptr, nullptr, &timeout);
     if (status >= 0) {
       if (FD_ISSET(socket_descriptor, &sock_des) > 0) {
         int32_t error_state = 0;
@@ -256,7 +258,7 @@ uint32_t TCPSocket::receiveData(byte* buffer, uint32_t max_size_to_read) {
             printf("Query error value: %s\n", strerror(error_state));
           }
           else {
-            printf("No error\n");
+            printf("Receive: no error\n");
             errno = 0;
             status = recv(socket_descriptor, buffer, max_size_to_read, 0);
             if (errno != 0) {

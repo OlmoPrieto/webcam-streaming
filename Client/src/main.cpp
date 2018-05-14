@@ -452,6 +452,29 @@ void NetworkTask() {
 }
 
 int main() {
+  TCPSocket socket(Socket::Type::NonBlock);
+  while (!socket.connect("127.0.0.1", 14194)) {
+
+  }
+
+  printf("Connected\n");
+
+  byte i = 0;
+  while (i < 255) {
+    byte buffer[1024];
+    memset(buffer, 0, 1024);
+    while (socket.receiveData(buffer, 1024) == 0) {
+
+    }
+    printf("Data received[1]: %u\n", buffer[1]);
+
+    ++i;
+  }
+
+  return 0;
+}
+
+int ___main() {
   signal(SIGINT, InterruptSignalHandler);
 
   std::thread network_thread(NetworkTask);
