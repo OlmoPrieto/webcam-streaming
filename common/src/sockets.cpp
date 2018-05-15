@@ -155,6 +155,10 @@ bool TCPSocket::sendData(byte* buffer, uint32_t buffer_size) {
         }
       }
     }
+    else {
+      // Data sent successfuly and status cannot be negative
+      bytes_sent = (uint32_t)status;
+    }
   }
   else if (sending_status == SendingStatus::Sending) {
     printf("Sending...\n");
