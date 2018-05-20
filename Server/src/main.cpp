@@ -47,6 +47,9 @@ std::atomic<bool> g_can_sync_network;
 std::atomic<bool> g_can_start_processing;
 std::atomic<bool> g_can_start_network;
 
+Chrono g_chrono;
+float elapsed_time = 0.0f;
+
 ProcessingState g_processing_state = ProcessingState::NotProcessing;
 NetworkState g_network_state = NetworkState::NoPeerConnected;
 
@@ -265,7 +268,7 @@ void ProcessingTask(byte* read_copy_ptr, byte* process_ptr) {
               process_ptr, g_format.fmt.pix.sizeimage, nullptr, 0);
 
           g_can_read_data_buffer = false;
-          g_can_send_data = true; // NETWORK stuff
+          //g_can_send_data = true; // NETWORK stuff
           g_processing_state = ProcessingState::NotProcessing;
 
           break;
@@ -285,10 +288,23 @@ void NetworkTask(byte* send_ptr) {
 
   TCPSocket* socket = nullptr;
 
+  g_can_send_data = true;
+  g_chrono.start();
+
   bool success = false;
   while (!g_program_should_finish) {
     if (g_can_start_network == true) {
       g_can_start_network = false;
+
+      g_chrono.stop();
+      elapsed_time += g_chrono.timeAsMilliseconds();
+      printf("elapsed_time: %.2f\n", elapsed_time);
+      if (elapsed_time >= 1000.0f) {
+        printf("Time!!!!!!!!!!!!!!!\n");
+        elapsed_time = 0.0f;
+        g_can_send_data = true;
+      }
+      g_chrono.start();
 
       switch (g_network_state) {
         case NetworkState::NoPeerConnected: {
@@ -308,6 +324,7 @@ void NetworkTask(byte* send_ptr) {
             g_network_state = NetworkState::NoPeerConnected;
           }
           else if (g_can_send_data) {
+            //printf("Sending...\n");
             g_network_state = NetworkState::Sending;
           }
 
@@ -318,10 +335,22 @@ void NetworkTask(byte* send_ptr) {
           // if you could successfuly send the data, go back to the other state
           //  however, if you couldn't send it, the socket may be in NonBlocking mode,
           //  so you shouldn't change state and continue calling this function.
-          if (socket->sendData(send_ptr, g_format.fmt.pix.sizeimage)) {
-            g_can_send_data = false;
-            g_network_state = NetworkState::PeerConnected;
-          	printf("Data sent\n");
+          // if (socket->sendData(send_ptr, g_format.fmt.pix.sizeimage)) {
+          //   g_can_send_data = false;
+          //   g_network_state = NetworkState::PeerConnected;
+          // 	printf("Data sent\n");
+          // }
+          byte buffer[131070];
+          memset(buffer, 0, 131070);
+          buffer[1] = 14;
+          buffer[32512] = 15;
+          if (g_can_send_data == true) {
+            if (socket->sendData(buffer, 131070)) {
+            //if (socket->sendData(send_ptr, g_format.fmt.pix.sizeimage)) {
+              g_can_send_data = false;
+              g_network_state = NetworkState::PeerConnected;
+              //printf("Data sent\n");
+            }
           }
 
           break;
@@ -333,7 +362,7 @@ void NetworkTask(byte* send_ptr) {
   }
 }
 
-int main() {
+int __main() {
 	TCPListener listener(Socket::Type::NonBlock);
 	listener.bind(14194);
 	listener.listen();
@@ -344,7 +373,7 @@ int main() {
 	}
 	printf("Accepted connection\n");
 
-	byte i = 1;
+	byte i = 0;
 	while (i < 255) {
 		byte buffer[1024];
 		memset(buffer, 0, 1024);
@@ -364,7 +393,7 @@ int main() {
 	return 0;
 }
 
-int __main(int argc, char** argv) {
+int main(int argc, char** argv) {
   signal(SIGINT, InterruptSignalHandler);
   
   byte* read_ptr      = nullptr;

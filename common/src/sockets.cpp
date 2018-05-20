@@ -161,7 +161,6 @@ bool TCPSocket::sendData(byte* buffer, uint32_t buffer_size) {
     }
   }
   else if (sending_status == SendingStatus::Sending) {
-    printf("Sending...\n");
     fd_set sock_des;
     memset(&sock_des, 0, sizeof(sock_des));
     FD_ZERO(&sock_des);
@@ -235,8 +234,7 @@ uint32_t TCPSocket::receiveData(byte* buffer, uint32_t max_size_to_read) {
         }
       }
     }
-
-    if (status >= 0) {
+    else {
       bytes_read = (uint32_t)status;
     }
   }
@@ -262,11 +260,11 @@ uint32_t TCPSocket::receiveData(byte* buffer, uint32_t max_size_to_read) {
             printf("Query error value: %s\n", strerror(error_state));
           }
           else {
-            printf("Receive: no error\n");
+            //printf("Receive: no error\n");
             errno = 0;
             status = recv(socket_descriptor, buffer, max_size_to_read, 0);
             if (errno != 0) {
-              printf("Receive data: %s\n", strerror(errno));
+              //printf("Receive data: %s\n", strerror(errno));
             }
             if (status >= 0) {
               bytes_read = (uint32_t)status;
@@ -341,8 +339,14 @@ bool TCPSocket::isConnected() const {
   sending_status = SendingStatus::CanSend;
 
   int32_t true_int_value = 1;
+  socklen_t sizeofunsignedint = sizeof(uint32_t);
+  uint32_t max_buffer_size = 0;
   setsockopt(socket_descriptor, SOL_SOCKET, SO_REUSEADDR, (int32_t*)&true_int_value, sizeof(int32_t));  // CAREFUL: this violates TCP/IP protocol making it unlikely but possible for the next program that binds on that port to pick up packets intended for the original program
-  
+  getsockopt(socket_descriptor, SOL_SOCKET, SO_RCVBUF, (uint32_t*)&max_buffer_size, &sizeofunsignedint);
+  printf("Receive buffer size: %u\n", max_buffer_size);
+  setsockopt(socket_descriptor, SOL_SOCKET, SO_RCVBUF, (uint32_t*)&max_buffer_size, sizeofunsignedint);
+  getsockopt(socket_descriptor, SOL_SOCKET, SO_RCVBUF, (uint32_t*)&max_buffer_size, &sizeofunsignedint);
+  printf("Receive buffer size: %u\n", max_buffer_size);
   // TODO: give the option to SO_NOSIGPIPE to be flagable
   //setsockopt(socket_descriptor, SOL_SOCKET, SO_NOSIGPIPE, (int32_t*)&true_int_value, sizeof(int32_t));
 

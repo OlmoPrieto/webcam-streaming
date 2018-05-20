@@ -425,14 +425,18 @@ void NetworkTask() {
         break;
       }
       case NetworkState::Receiving: {
-        uint32_t read_bytes = g_socket.receiveData(g_recv_data_ptr, g_image_width * g_image_height * 3);
-        
+        byte buffer[131070];
+        memset(buffer, 0, 131070);
+        //uint32_t read_bytes = g_socket.receiveData(g_recv_data_ptr, g_image_width * g_image_height * 3);
+        uint32_t read_bytes = g_socket.receiveData(buffer, 131070);
         if (read_bytes == 0) {
           g_can_sync_network = false;
           ignore_sync_flag = true;
         }
         else {
           printf("Data received\n");
+          printf("buffer[1]:     %u\n", buffer[1]);
+          printf("buffer[32512]: %u\n", buffer[32512]);
           g_network_state = NetworkState::Connected;
         }
 
@@ -451,7 +455,7 @@ void NetworkTask() {
   g_socket.close();
 }
 
-int main() {
+int __main() {
   TCPSocket socket(Socket::Type::NonBlock);
   while (!socket.connect("127.0.0.1", 14194)) {
 
@@ -459,6 +463,8 @@ int main() {
 
   printf("Connected\n");
 
+  Chrono c;
+  c.start();
   byte i = 0;
   while (i < 255) {
     byte buffer[1024];
@@ -470,11 +476,13 @@ int main() {
 
     ++i;
   }
+  c.stop();
+  printf("Time to receive data: %.2f\n", c.timeAsMilliseconds());
 
   return 0;
 }
 
-int ___main() {
+int main() {
   signal(SIGINT, InterruptSignalHandler);
 
   std::thread network_thread(NetworkTask);
