@@ -8,6 +8,7 @@
 #include <thread>
 #include <vector>
 
+#ifdef __PLATFORM_LINUX__
 // v4l
 #include <linux/videodev2.h>
 #include <libv4l2.h>
@@ -18,6 +19,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 // \v4l
+#endif
 
 #include "chrono.h"
 #include "sockets.h"
@@ -36,6 +38,10 @@ enum class NetworkState {
 };
 
 // GLOBAL VARIABLES
+#ifndef __PLATFORM_LINUX__
+struct v4l2_buffer{};
+struct v4l2_format{struct fmt{struct pix{int sizeimage;}pix;}fmt;};
+#endif
 struct v4l2_buffer g_bufferinfo;
 struct v4l2_format g_format;
 int32_t g_fd = -1;
@@ -94,6 +100,7 @@ void SendData(TCPSocket* socket, byte* buffer, uint32_t buffer_size) {
   printf("Time to send image: %.2fms\n", c.timeAsMilliseconds());
 }
 
+#ifdef __PLATFORM_LINUX__
 void InitializeVideoDevice(const char* device_path) {
   Chrono c;
   c.start();
@@ -248,6 +255,7 @@ void GrabCameraFrame(byte* target_buffer) {
   c.stop();
   printf("Time to get frame: %.2fms\n", c.timeAsMilliseconds());
 }
+#endif
 
 
 void ProcessingTask(byte* read_copy_ptr, byte* process_ptr) {
@@ -340,12 +348,12 @@ void NetworkTask(byte* send_ptr) {
           //   g_network_state = NetworkState::PeerConnected;
           // 	printf("Data sent\n");
           // }
-          byte buffer[131070];
-          memset(buffer, 0, 131070);
-          buffer[1] = 14;
-          buffer[32512] = 15;
+          byte buffer[131074];
+          memset(buffer, 0, 131074);
+           buffer[1] = 14;
+           buffer[130000] = 15;
           if (g_can_send_data == true) {
-            if (socket->sendData(buffer, 131070)) {
+            if (socket->sendData(buffer, 131074)) {
             //if (socket->sendData(send_ptr, g_format.fmt.pix.sizeimage)) {
               g_can_send_data = false;
               g_network_state = NetworkState::PeerConnected;
@@ -395,6 +403,9 @@ int __main() {
 
 int main(int argc, char** argv) {
   signal(SIGINT, InterruptSignalHandler);
+
+  g_can_sync_network = false;
+  g_can_sync_processing = false;
   
   byte* read_ptr      = nullptr;
   byte* read_copy_ptr = nullptr;
@@ -406,6 +417,7 @@ int main(int argc, char** argv) {
 
   const char* device = (argc > 1) ? argv[1] : "/dev/video0";
   //InitializeVideoDevice(device);
+  g_format.fmt.pix.sizeimage = 640 * 480 * 3;
 
   byte* buffers[4] = {
     (byte*)malloc(g_format.fmt.pix.sizeimage),

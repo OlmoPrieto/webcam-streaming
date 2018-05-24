@@ -31,6 +31,7 @@ uint32_t g_window_width = 640;
 uint32_t g_window_height = 480;
 uint32_t g_image_width = 640;
 uint32_t g_image_height = 480;
+uint32_t g_bytes_read = 0;
 bool g_program_should_finish = false;
 
 GLuint g_vao_id = 0;
@@ -374,28 +375,6 @@ void InitializeOpenGLStuff() {
   glUniformMatrix4fv(mvp_location, 1, GL_FALSE, (const GLfloat*)p.matrix);
 }
 
-
-int _main_() {
-  TCPSocket socket(Socket::Type::NonBlock);
-  bool success = false;
-  while (!success) {
-    success = socket.connect("127.0.0.1", 14194);
-    //success = socket.connect("81.202.4.30", 14194);
-    //printf("Trying to connect...\n");
-  }
-  uint32_t buffer_size = 600000;
-  byte* data = (byte*)malloc(buffer_size);
-  memset(data, 2, buffer_size);
-  socket.sendData(data, buffer_size);
-
-  // while (true) {
-
-  // }
-  printf("Data sent\n");
-
-  return 0;
-}
-
 void NetworkTask() {
   printf("Initializing network...\n");
 
@@ -425,19 +404,31 @@ void NetworkTask() {
         break;
       }
       case NetworkState::Receiving: {
-        byte buffer[131070];
-        memset(buffer, 0, 131070);
-        //uint32_t read_bytes = g_socket.receiveData(g_recv_data_ptr, g_image_width * g_image_height * 3);
-        uint32_t read_bytes = g_socket.receiveData(buffer, 131070);
-        if (read_bytes == 0) {
-          g_can_sync_network = false;
-          ignore_sync_flag = true;
-        }
-        else {
-          printf("Data received\n");
-          printf("buffer[1]:     %u\n", buffer[1]);
-          printf("buffer[32512]: %u\n", buffer[32512]);
-          g_network_state = NetworkState::Connected;
+        byte buffer[131074];
+        memset(buffer, 0, 131074);
+
+        uint32_t read_bytes = 0;
+        while (read_bytes < 131074) {
+          //read_bytes = g_socket.receiveData(g_recv_data_ptr, g_image_width * g_image_height * 3);
+          read_bytes = g_socket.receiveData(buffer + g_bytes_read, 131074);
+          
+          // TODO: maybe its needed another parameter in receiveData -> write_offset
+          //       which indicates in which byte the socket will write in the buffer
+
+          if (read_bytes == 0) {
+            g_can_sync_network = false;
+            ignore_sync_flag = true;
+          }
+          else {
+            printf("Data received: %u bytes\n", read_bytes);
+            printf("buffer[1]:     %u\n", buffer[1]);
+            printf("buffer[130000]: %u\n\n", buffer[130000]);
+            g_bytes_read += read_bytes;
+            if (g_bytes_read == 131074) {
+              g_bytes_read = 0;
+            }
+            g_network_state = NetworkState::Connected;
+          }
         }
 
         break;
