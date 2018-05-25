@@ -408,12 +408,10 @@ void NetworkTask() {
         memset(buffer, 0, 131074);
 
         uint32_t read_bytes = 0;
-        while (read_bytes < 131074) {
-          //read_bytes = g_socket.receiveData(g_recv_data_ptr, g_image_width * g_image_height * 3);
-          read_bytes = g_socket.receiveData(buffer + g_bytes_read, 131074);
-          
-          // TODO: maybe its needed another parameter in receiveData -> write_offset
-          //       which indicates in which byte the socket will write in the buffer
+        //while (g_bytes_read < 131074) {
+        while (g_bytes_read < g_image_width * g_image_height * 3) {
+          read_bytes = g_socket.receiveData(g_recv_data_ptr + g_bytes_read, g_image_width * g_image_height * 3);
+          //read_bytes = g_socket.receiveData(buffer + g_bytes_read, 131074);
 
           if (read_bytes == 0) {
             g_can_sync_network = false;
@@ -421,15 +419,19 @@ void NetworkTask() {
           }
           else {
             printf("Data received: %u bytes\n", read_bytes);
-            printf("buffer[1]:     %u\n", buffer[1]);
-            printf("buffer[130000]: %u\n\n", buffer[130000]);
-            g_bytes_read += read_bytes;
-            if (g_bytes_read == 131074) {
-              g_bytes_read = 0;
-            }
-            g_network_state = NetworkState::Connected;
+            // printf("buffer[1]:     %u\n", buffer[1]);
+            // printf("buffer[130000]: %u\n\n", buffer[130000]);
+            // if (g_bytes_read == g_image_width * g_image_height * 3) {
+            //   g_bytes_read = 0;
+            //   g_network_state = NetworkState::Connected;
+            // }
           }
+
+          g_bytes_read += read_bytes;
         }
+
+        g_bytes_read = 0;
+        g_network_state = NetworkState::Connected;
 
         break;
       }

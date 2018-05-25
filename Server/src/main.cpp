@@ -307,7 +307,7 @@ void NetworkTask(byte* send_ptr) {
       g_chrono.stop();
       elapsed_time += g_chrono.timeAsMilliseconds();
       printf("elapsed_time: %.2f\n", elapsed_time);
-      if (elapsed_time >= 1000.0f) {
+      if (elapsed_time >= 2000.0f) {
         printf("Time!!!!!!!!!!!!!!!\n");
         elapsed_time = 0.0f;
         g_can_send_data = true;
@@ -348,18 +348,26 @@ void NetworkTask(byte* send_ptr) {
           //   g_network_state = NetworkState::PeerConnected;
           // 	printf("Data sent\n");
           // }
-          byte buffer[131074];
-          memset(buffer, 0, 131074);
-           buffer[1] = 14;
-           buffer[130000] = 15;
+
+          // byte buffer[131074];
+          // memset(buffer, 0, 131074);
+          // buffer[1] = 14;
+          // buffer[130000] = 15;
+
+          //byte buffer[921600]; // this seems to give a segmentation fault
+          byte* buffer = (byte*)malloc(921600);
+          memset(buffer, 0, 921600);
+          buffer[1] = 14;
+          buffer[130000] = 15;
           if (g_can_send_data == true) {
-            if (socket->sendData(buffer, 131074)) {
+            if (socket->sendData(buffer, 921600)) {
             //if (socket->sendData(send_ptr, g_format.fmt.pix.sizeimage)) {
               g_can_send_data = false;
               g_network_state = NetworkState::PeerConnected;
               //printf("Data sent\n");
             }
           }
+          free(buffer);
 
           break;
         }
