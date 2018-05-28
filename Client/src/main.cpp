@@ -375,11 +375,43 @@ void InitializeOpenGLStuff() {
   glUniformMatrix4fv(mvp_location, 1, GL_FALSE, (const GLfloat*)p.matrix);
 }
 
+// buffer must have one available channel [space]
+void AddAlphaChannelData(byte* buffer, uint32_t size, uint32_t new_size) {
+  byte* aux_buffer = (byte*)malloc(new_size);
+
+  byte* ptr   = buffer;
+  byte* other = aux_buffer;
+  for (uint32_t i = 0; i < size; i += 3) {
+    *(other + 0) = *(ptr + 0);
+    *(other + 1) = *(ptr + 1);
+    *(other + 2) = *(ptr + 2);
+    *(other + 3) = 255;
+
+    ptr += 3;
+    other += 4;
+  }
+  // // store a ref to the old buffer
+  // other = buffer;
+
+  // // return a pointer to the new (resized) buffer
+  // buffer = aux_buffer;
+
+  // // release old buffer
+  // free(other);
+  printf("releasing1\n");
+  free(buffer);
+  printf("releasing2\n");
+  buffer = aux_buffer;
+}
+
 void NetworkTask() {
   printf("Initializing network...\n");
 
   g_recv_data_buffer = (byte*)malloc(g_image_width * g_image_height * 4);
+  memset(g_recv_data_buffer, 0, g_image_width * g_image_height * 4);
   g_recv_data_ptr = g_recv_data_buffer;
+
+  g_can_sync_network = false;
 
   bool success = false;
   bool ignore_sync_flag = false;
@@ -399,32 +431,29 @@ void NetworkTask() {
       }
       case NetworkState::Connected: {
         g_network_state = NetworkState::Receiving;
-        printf("Connected!\n");
+        g_can_sync_network = false;
+        //printf("Connected!\n");
 
         break;
       }
       case NetworkState::Receiving: {
-        byte buffer[131074];
-        memset(buffer, 0, 131074);
+        memset(g_recv_data_ptr, 0, g_image_width * g_image_height * 4);
 
         uint32_t read_bytes = 0;
-        //while (g_bytes_read < 131074) {
         while (g_bytes_read < g_image_width * g_image_height * 3) {
           read_bytes = g_socket.receiveData(g_recv_data_ptr + g_bytes_read, g_image_width * g_image_height * 3);
-          //read_bytes = g_socket.receiveData(buffer + g_bytes_read, 131074);
-
+          
           if (read_bytes == 0) {
             g_can_sync_network = false;
             ignore_sync_flag = true;
+
+            break;
           }
           else {
+            AddAlphaChannelData(g_recv_data_ptr, g_image_width * g_image_height * 3, g_image_width * g_image_height * 4);
+            
             printf("Data received: %u bytes\n", read_bytes);
-            // printf("buffer[1]:     %u\n", buffer[1]);
-            // printf("buffer[130000]: %u\n\n", buffer[130000]);
-            // if (g_bytes_read == g_image_width * g_image_height * 3) {
-            //   g_bytes_read = 0;
-            //   g_network_state = NetworkState::Connected;
-            // }
+            printf("%u\n", g_recv_data_ptr[3]);
           }
 
           g_bytes_read += read_bytes;
@@ -432,6 +461,7 @@ void NetworkTask() {
 
         g_bytes_read = 0;
         g_network_state = NetworkState::Connected;
+        g_can_sync_network = true;
 
         break;
       }
@@ -483,6 +513,10 @@ int main() {
   InitializeGraphics();
   InitializeOpenGLStuff();
 
+  g_draw_buffer = (byte*)malloc(g_image_width * g_image_height * 4);
+  memset(g_draw_buffer, 0, g_image_width * g_image_height * 4);
+  g_draw_buffer_ptr = g_draw_buffer;
+
   byte r = 0;
   byte g = 64;
   byte b = 128;
@@ -491,7 +525,7 @@ int main() {
   	c.start();
     glClear(GL_COLOR_BUFFER_BIT);
 
-   //  byte* ptr = g_draw_buffer;
+    // byte* ptr = g_draw_buffer;
 	  // memset(ptr, 0, g_image_width * g_image_height * 4);
 	  // for (unsigned int i = 0; i < g_image_width * g_image_height; i++) {
 	  // 	*ptr      = r;
@@ -516,14 +550,18 @@ int main() {
     // Only start to sync when the program is connected to the server, 
     //  because otherwise the program could be hung.
     if (g_can_sync_network == true && g_network_state != NetworkState::NotConnected) {
-      printf("Waiting for network to end frame...\n");
-      //network_thread.join();
-      g_can_sync_network = false;
+      //g_draw_buffer_ptr = g_recv_data_ptr;
+      
       if (g_draw_buffer_ptr == g_draw_buffer) {
+        // byte* swap = g_draw_buffer_ptr;
+        // g_draw_buffer_ptr = g_recv_data_ptr;
+        // g_recv_data_ptr = swap;
         g_draw_buffer_ptr = g_recv_data_buffer;
+        g_recv_data_ptr = g_draw_buffer;
       }
       else {
         g_draw_buffer_ptr = g_draw_buffer;
+        g_recv_data_ptr = g_recv_data_buffer;
       }
     }
 
@@ -534,11 +572,17 @@ int main() {
   // CLEANUP
   network_thread.join();
 
-  if (g_draw_buffer) {
-    free(g_draw_buffer);
+  // if (g_draw_buffer) {
+  //   free(g_draw_buffer);
+  // }
+  // if (g_recv_data_buffer) {
+  //   free(g_recv_data_buffer);
+  // }
+  if (g_draw_buffer_ptr) {
+    free(g_draw_buffer_ptr);
   }
-  if (g_recv_data_buffer) {
-    free(g_recv_data_buffer);
+  if (g_recv_data_ptr) {
+    free(g_recv_data_ptr);
   }
   glfwDestroyWindow(g_window);
   glfwTerminate();

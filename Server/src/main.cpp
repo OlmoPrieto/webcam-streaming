@@ -299,6 +299,10 @@ void NetworkTask(byte* send_ptr) {
   g_can_send_data = true;
   g_chrono.start();
 
+  byte r = 0;
+  byte g = 64;
+  byte b = 128;
+
   bool success = false;
   while (!g_program_should_finish) {
     if (g_can_start_network == true) {
@@ -306,9 +310,9 @@ void NetworkTask(byte* send_ptr) {
 
       g_chrono.stop();
       elapsed_time += g_chrono.timeAsMilliseconds();
-      printf("elapsed_time: %.2f\n", elapsed_time);
-      if (elapsed_time >= 2000.0f) {
-        printf("Time!!!!!!!!!!!!!!!\n");
+      //printf("elapsed_time: %.2f\n", elapsed_time);
+      if (elapsed_time >= 33.3333f) {
+        printf("Can send data\n");
         elapsed_time = 0.0f;
         g_can_send_data = true;
       }
@@ -340,19 +344,16 @@ void NetworkTask(byte* send_ptr) {
         }
 
         case NetworkState::Sending: {
-          // if you could successfuly send the data, go back to the other state
-          //  however, if you couldn't send it, the socket may be in NonBlocking mode,
-          //  so you shouldn't change state and continue calling this function.
-          // if (socket->sendData(send_ptr, g_format.fmt.pix.sizeimage)) {
-          //   g_can_send_data = false;
-          //   g_network_state = NetworkState::PeerConnected;
-          // 	printf("Data sent\n");
-          // }
+          byte* ptr = send_ptr;
+          for (uint32_t i = 0; i < g_format.fmt.pix.sizeimage; i += 3) {
+            *ptr       = r;
+            *(ptr + 1) = g;
+            *(ptr + 2) = b;
 
-          // byte buffer[131074];
-          // memset(buffer, 0, 131074);
-          // buffer[1] = 14;
-          // buffer[130000] = 15;
+            ptr += 3;
+          }
+          r++; g++; b++;
+          r %= 255; g %= 255; b %= 255;
 
           //byte buffer[921600]; // this seems to give a segmentation fault
           byte* buffer = (byte*)malloc(921600);
@@ -360,11 +361,10 @@ void NetworkTask(byte* send_ptr) {
           buffer[1] = 14;
           buffer[130000] = 15;
           if (g_can_send_data == true) {
-            if (socket->sendData(buffer, 921600)) {
-            //if (socket->sendData(send_ptr, g_format.fmt.pix.sizeimage)) {
+            //if (socket->sendData(buffer, 921600)) {
+            if (socket->sendData(send_ptr, g_format.fmt.pix.sizeimage)) {
               g_can_send_data = false;
               g_network_state = NetworkState::PeerConnected;
-              //printf("Data sent\n");
             }
           }
           free(buffer);
@@ -415,17 +415,12 @@ int main(int argc, char** argv) {
   g_can_sync_network = false;
   g_can_sync_processing = false;
   
+  g_format.fmt.pix.sizeimage = 640 * 480 * 3;
+
   byte* read_ptr      = nullptr;
   byte* read_copy_ptr = nullptr;
   byte* process_ptr   = nullptr;
   byte* send_ptr      = nullptr;
-
-  std::thread network_thread(NetworkTask, send_ptr);
-  std::thread process_image_thread(ProcessingTask, read_copy_ptr, process_ptr);
-
-  const char* device = (argc > 1) ? argv[1] : "/dev/video0";
-  //InitializeVideoDevice(device);
-  g_format.fmt.pix.sizeimage = 640 * 480 * 3;
 
   byte* buffers[4] = {
     (byte*)malloc(g_format.fmt.pix.sizeimage),
@@ -438,10 +433,11 @@ int main(int argc, char** argv) {
   process_ptr   = buffers[2];
   send_ptr      = buffers[3];
 
-  memset(read_ptr, 0xFF0000, g_format.fmt.pix.sizeimage);
-  memset(read_copy_ptr, 0xFF0000, g_format.fmt.pix.sizeimage);
-  memset(process_ptr, 0xFF0000, g_format.fmt.pix.sizeimage);
-  memset(send_ptr, 0xFF0000, g_format.fmt.pix.sizeimage);
+  std::thread network_thread(NetworkTask, send_ptr);
+  std::thread process_image_thread(ProcessingTask, read_copy_ptr, process_ptr);
+
+  const char* device = (argc > 1) ? argv[1] : "/dev/video0";
+  //InitializeVideoDevice(device);
 
   //EnableVideoStreaming();
 
