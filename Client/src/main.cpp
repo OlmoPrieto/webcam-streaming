@@ -390,18 +390,14 @@ void AddAlphaChannelData(byte* buffer, uint32_t size, uint32_t new_size) {
     ptr += 3;
     other += 4;
   }
-  // // store a ref to the old buffer
-  // other = buffer;
+  // store a ref to the old buffer
+  other = buffer;
 
-  // // return a pointer to the new (resized) buffer
-  // buffer = aux_buffer;
-
-  // // release old buffer
-  // free(other);
-  printf("releasing1\n");
-  free(buffer);
-  printf("releasing2\n");
+  // return a pointer to the new (resized) buffer
   buffer = aux_buffer;
+
+  // release old buffer
+  free(other);
 }
 
 void NetworkTask() {
@@ -450,15 +446,22 @@ void NetworkTask() {
             break;
           }
           else {
-            AddAlphaChannelData(g_recv_data_ptr, g_image_width * g_image_height * 3, g_image_width * g_image_height * 4);
-            
             printf("Data received: %u bytes\n", read_bytes);
-            printf("%u\n", g_recv_data_ptr[3]);
           }
 
           g_bytes_read += read_bytes;
         }
 
+        //AddAlphaChannelData(g_recv_data_ptr, g_image_width * g_image_height * 3, g_image_width * g_image_height * 4);
+        byte* ptr = g_recv_data_ptr;
+        for (uint32_t i = 0; i < g_image_width * g_image_height * 4; i += 4) {
+          *(ptr + 0) = 0;
+          *(ptr + 1) = 255;
+          *(ptr + 2) = 0;
+          *(ptr + 3) = 255;
+
+          ptr += 4;
+        }
         g_bytes_read = 0;
         g_network_state = NetworkState::Connected;
         g_can_sync_network = true;
@@ -540,7 +543,6 @@ int main() {
 	  	g_image_width, g_image_height, GL_RGBA, GL_UNSIGNED_BYTE, g_draw_buffer_ptr);
 
     glDrawArrays(GL_TRIANGLES, 0, 6);
-    //CheckGLError("glDrawArrays");
 
     c.stop();
     //printf("Frame time: %.2f ms\n", c.timeAsMilliseconds());
@@ -584,6 +586,7 @@ int main() {
   if (g_recv_data_ptr) {
     free(g_recv_data_ptr);
   }
+
   glfwDestroyWindow(g_window);
   glfwTerminate();
 
