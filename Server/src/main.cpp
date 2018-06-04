@@ -312,7 +312,7 @@ void NetworkTask(byte* send_ptr) {
       elapsed_time += g_chrono.timeAsMilliseconds();
       //printf("elapsed_time: %.2f\n", elapsed_time);
       if (elapsed_time >= 33.3333f) {
-        printf("Can send data\n");
+        //printf("Can send data\n");
         elapsed_time = 0.0f;
         g_can_send_data = true;
       }
@@ -355,9 +355,9 @@ void NetworkTask(byte* send_ptr) {
           // r++; g++; b++;
           // r %= 255; g %= 255; b %= 255;
           for (uint32_t i = 0; i < g_format.fmt.pix.sizeimage; i += 3) {
-            *(ptr + 0) = 255;
+            *(ptr + 0) = 0;
             *(ptr + 1) = 0;
-            *(ptr + 2) = 0;
+            *(ptr + 2) = 255;
 
             ptr += 3;
           }
