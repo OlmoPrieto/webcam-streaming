@@ -345,22 +345,22 @@ void NetworkTask(byte* send_ptr) {
 
         case NetworkState::Sending: {
           byte* ptr = send_ptr;
-          // for (uint32_t i = 0; i < g_format.fmt.pix.sizeimage; i += 3) {
-          //   *ptr       = r;
-          //   *(ptr + 1) = g;
-          //   *(ptr + 2) = b;
-
-          //   ptr += 3;
-          // }
-          // r++; g++; b++;
-          // r %= 255; g %= 255; b %= 255;
           for (uint32_t i = 0; i < g_format.fmt.pix.sizeimage; i += 3) {
-            *(ptr + 0) = 0;
-            *(ptr + 1) = 0;
-            *(ptr + 2) = 255;
+            *(ptr + 0) = r;
+            *(ptr + 1) = g;
+            *(ptr + 2) = b;
 
             ptr += 3;
           }
+          r++; g++; b++;
+          r %= 255; g %= 255; b %= 255;
+          // for (uint32_t i = 0; i < g_format.fmt.pix.sizeimage; i += 3) {
+          //   *(ptr + 0) = 0;
+          //   *(ptr + 1) = 0;
+          //   *(ptr + 2) = 255;
+
+          //   ptr += 3;
+          // }
 
           //byte buffer[921600]; // this seems to give a segmentation fault
           byte* buffer = (byte*)malloc(921600);
