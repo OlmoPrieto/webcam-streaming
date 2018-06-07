@@ -53,6 +53,7 @@ byte* g_draw_buffer = nullptr;
 TCPSocket g_socket(Socket::Type::NonBlock);
 NetworkState g_network_state = NetworkState::NotConnected;
 std::atomic<bool> g_can_sync_network;
+std::atomic<bool> g_can_receive_data;
 
 
 class Mat4 {
@@ -409,6 +410,7 @@ void NetworkTask() {
   g_recv_data_ptr = g_recv_data_buffer;
 
   g_can_sync_network = false;
+  g_can_receive_data = true;
 
   bool success = false;
   bool ignore_sync_flag = false;
@@ -430,26 +432,34 @@ void NetworkTask() {
         break;
       }
       case NetworkState::Receiving: {
-        //if (g_can_sync_network == false) {
+        if (g_can_receive_data == true) {
           //ignore_sync_flag = false;
           uint32_t read_bytes = 0;
           while (g_bytes_read < g_image_width * g_image_height * 3) {
             read_bytes = g_socket.receiveData(g_recv_data_ptr + g_bytes_read, g_image_width * g_image_height * 3);
             
-            if (read_bytes == 0 && g_bytes_read > 0) {
+            if (read_bytes == 0 && g_bytes_read == 0) {
               ignore_sync_flag = true;
+              //printf("First\n");
+
+              break;
+            }
+            else if (read_bytes == 0 && (g_bytes_read > 0 && g_bytes_read < g_image_width * g_image_height * 3)) {
+              //ignore_sync_flag = true;
+              //printf("Second\n");
 
               break;
             }
             else {
               ignore_sync_flag = false;
-              //printf("Data received: %u bytes\n", read_bytes);
+              printf("Data received: %u bytes\n", read_bytes);
             }
 
             g_bytes_read += read_bytes;
           }
 
           if (!ignore_sync_flag) {
+            printf("Received %u bytes\n", g_bytes_read);
             printf("Received image (frame %u)\n", g_frame_count.load());
             AddAlphaChannelData(&g_recv_data_ptr, g_image_width * g_image_height * 3, g_image_width * g_image_height * 4);
             printf("\n%u %u %u %u\n", g_recv_data_ptr[20000], g_recv_data_ptr[20001], g_recv_data_ptr[20002], g_recv_data_ptr[20003]);
@@ -466,10 +476,7 @@ void NetworkTask() {
             // }
             g_network_state = NetworkState::Connected;
           }
-        //} // if (g_can_sync_network == false)
-        // else {
-        //   ignore_sync_flag = true;
-        // }
+        }
 
         break;
       } // case NetworkState::Receiving
@@ -477,10 +484,13 @@ void NetworkTask() {
 
     if (ignore_sync_flag == false) {
       g_can_sync_network = true;
+      g_can_receive_data = false;
     }
-    else {
+    else { // ignore_sync_flag == true
       ignore_sync_flag = false;
+
       g_can_sync_network = false;
+      g_can_receive_data = true;
     }
 
     // for every loop, reset bytes read
@@ -490,34 +500,58 @@ void NetworkTask() {
   g_socket.close();
 }
 
-int __main() {
+int main() {
   TCPSocket socket(Socket::Type::NonBlock);
   while (!socket.connect("127.0.0.1", 14194)) {
 
   }
 
+
+  /*
+  
+  TODO: the current version can send 1MB with no problem.
+  But if you try to send 1MB way too fast, the program 
+  does not work and seems to lost packets??
+
+  */
+
+
   printf("Connected\n");
 
   Chrono c;
   c.start();
-  byte i = 0;
-  while (i < 255) {
-    byte buffer[1024];
-    memset(buffer, 0, 1024);
-    while (socket.receiveData(buffer, 1024) == 0) {
+  byte buffer[1000000];
+  memset(buffer, 0, 1000000);
+  
+  uint32_t g_data_read = 0;
+  uint32_t data_read = 0;
 
+  for (int i = 0; i < 10; ++i) {
+    g_data_read = 0;
+    data_read = 0;
+    while (g_data_read <= 1000000) {
+      data_read = socket.receiveData(buffer + g_data_read, 1000000 - g_data_read);
+      if (data_read > 0) {
+        printf("Data read: %u bytes\n", data_read);
+      }
+      g_data_read += data_read;
     }
-    printf("Data received[1]: %u\n", buffer[1]);
 
-    ++i;
+    printf("\n");
   }
+
+  // buffer[1] = 15;
+  // socket.sendData(buffer, 1000000);
+
+  printf("Received %u bytes\n", g_data_read);
+  printf("Data received[1]: %u\n", buffer[1]);
   c.stop();
-  printf("Time to receive data: %.2f\n", c.timeAsMilliseconds());
+  printf("Time to receive data: %.2f ms\n", c.timeAsMilliseconds());
 
   return 0;
 }
 
-int main() {
+int __main() {
   signal(SIGINT, InterruptSignalHandler);
 
   std::thread network_thread(NetworkTask);
@@ -570,16 +604,17 @@ int main() {
     //  because otherwise the program could be hung.
     if (g_can_sync_network == true && g_network_state != NetworkState::NotConnected) {
       printf("Switching pointers (frame %u)\n", g_frame_count.load());
-      // if (g_draw_buffer_ptr == g_draw_buffer) {
-      //   g_draw_buffer_ptr = g_recv_data_buffer;
-      //   g_recv_data_ptr = g_draw_buffer;
-      // }
-      // else {
-      //   g_draw_buffer_ptr = g_draw_buffer;
-      //   g_recv_data_ptr = g_recv_data_buffer;
-      // }
+      if (g_draw_buffer_ptr == g_draw_buffer) {
+        g_draw_buffer_ptr = g_recv_data_buffer;
+        g_recv_data_ptr = g_draw_buffer;
+      }
+      else {
+        g_draw_buffer_ptr = g_draw_buffer;
+        g_recv_data_ptr = g_recv_data_buffer;
+      }
 
       g_can_sync_network = false;
+      g_can_receive_data = true;
     }
 
     ++g_frame_count;

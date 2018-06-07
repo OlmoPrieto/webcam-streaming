@@ -4,9 +4,19 @@
 #include <cerrno>
 #include <cstdio>
 
+#include <netinet/tcp.h>
+
+
 #define IGNORE_PRINTF 0
 #if IGNORE_PRINTF == 1
   #define printf(fmt, ...) (0)
+#endif
+
+#define error_printf(fmt, ...) (printf(fmt, ##__VA_ARGS__))
+#define IGNORE_ERROR_PRINTF 0
+#if IGNORE_ERROR_PRINTF == 1
+  #undef error_printf
+  #define error_printf(fmt, ...) (0)
 #endif
 
 // [TCPSocket]
@@ -50,9 +60,8 @@ bool TCPSocket::connect(const char* ip, uint32_t port) {
       if (errno != 0) {
         switch (errno) {
           case EINPROGRESS:
-          case EALREADY:
-          case EINTR: {
-            printf("Cannot stablish connection now; will keep trying\n");
+          case EALREADY: {
+            error_printf("Cannot stablish connection now; will keep trying\n");
             connection_status = ConnectionStatus::Connecting;
 
             break;
@@ -65,13 +74,13 @@ bool TCPSocket::connect(const char* ip, uint32_t port) {
             break;
           }
           default: {
-            printf("Connect error not supported: %s\n", strerror(errno));
+            error_printf("Connect error not supported: %s\n", strerror(errno));
           }
         }
       }
     }
     else if (status == 0) {
-      printf("CONNECTED\n");
+      error_printf("CONNECTED\n");
       connection_status = ConnectionStatus::Connected;
     }
   }
@@ -93,25 +102,25 @@ bool TCPSocket::connect(const char* ip, uint32_t port) {
         int32_t result = getsockopt(socket_descriptor, SOL_SOCKET, SO_ERROR, &error_state, &sizeofint);
         if (result == 0) {
           if (error_state != 0) {
-            printf("Query error value: %s\n", strerror(error_state));
+            error_printf("Query error value: %s\n", strerror(error_state));
             if (error_state == ECONNREFUSED) {
               close();
               construct(type);
             }
           }
           else {
-            printf("No error\n");
+            error_printf("No error, connected\n");
             connection_status = ConnectionStatus::Connected;
           }
         }
         else if (errno != 0) {
-          printf("getsockopt: %s\n", strerror(errno));
+          error_printf("getsockopt: %s\n", strerror(errno));
         }
       }
     }
   }
   else {
-    printf("Socket already connected, resetting...\n");
+    error_printf("Socket already connected, resetting...\n");
     close();
     construct(type);
   }
@@ -119,7 +128,7 @@ bool TCPSocket::connect(const char* ip, uint32_t port) {
   return connection_status == ConnectionStatus::Connected;
 }
 
-bool TCPSocket::sendData(byte* buffer, uint32_t buffer_size) {
+uint32_t TCPSocket::sendData(byte* buffer, uint32_t buffer_size) {
   uint32_t bytes_sent = 0;
   int32_t status = 0;
 
@@ -136,7 +145,7 @@ bool TCPSocket::sendData(byte* buffer, uint32_t buffer_size) {
             break;
           }
           case EPIPE: {
-            printf("The connection was closed\n");
+            error_printf("The connection was closed\n");
 
             break;
           }
@@ -148,7 +157,7 @@ bool TCPSocket::sendData(byte* buffer, uint32_t buffer_size) {
             break;
           }
           default: {
-            printf("Send data: %s\n", strerror(errno));
+            error_printf("Send data: %s\n", strerror(errno));
 
             break;
           }
@@ -170,7 +179,7 @@ bool TCPSocket::sendData(byte* buffer, uint32_t buffer_size) {
     memset(&timeout, 0, sizeof(timeout));
     //timeout.tv_usec = 1;
     errno = 0;
-    status = select(socket_descriptor + 1, &sock_des, nullptr, nullptr, &timeout); // CAREFUL: test this
+    status = select(socket_descriptor + 1, nullptr, &sock_des, nullptr, &timeout); // CAREFUL: test this
     if (status >= 0) {
       if (FD_ISSET(socket_descriptor, &sock_des) > 0) {
         int error_state = 0;
@@ -178,29 +187,37 @@ bool TCPSocket::sendData(byte* buffer, uint32_t buffer_size) {
         int result = getsockopt(socket_descriptor, SOL_SOCKET, SO_ERROR, &error_state, &sizeofint);
         if (result == 0) {
           if (error_state != 0) {
-            printf("Query error value: %s\n", strerror(error_state));
+            error_printf("Query error value: %s\n", strerror(error_state));
           }
           else {
-            printf("No error\n");
             errno = 0;
             status = ::send(socket_descriptor, buffer, buffer_size, 0);
             if (errno != 0) {
-              printf("Send data: %s\n", strerror(errno));
+              error_printf("Send data: %s\n", strerror(errno));
             }
-            if (status >= 0) {
+            if (status > 0) {
               bytes_sent = (uint32_t)status;
               sending_status = SendingStatus::CanSend;
+            }
+            else if (status == 0) {
+              error_printf("Send returned 0 bytes\n");
             }
           }
         }
         else if (errno != 0) {
-          printf("getsockopt: %s\n", strerror(errno));
+          error_printf("getsockopt: %s\n", strerror(errno));
         }
       }
+      else {
+        error_printf("Socket not ready to send\n");
+      }
+    }
+    else {
+      printf("Receive data select(): %s\n", strerror(errno));
     }
   }
 
-  return bytes_sent > 0;
+  return bytes_sent;
 }
 
 uint32_t TCPSocket::receiveData(byte* buffer, uint32_t max_size_to_read) {
@@ -227,7 +244,8 @@ uint32_t TCPSocket::receiveData(byte* buffer, uint32_t max_size_to_read) {
             break;
           }
           default: {
-            printf("Receive data: %s\n", strerror(errno));
+            error_printf("Receive data: %s\n", strerror(errno));
+            //error_printf("%u\n", errno);
 
             break;
           }
@@ -248,23 +266,31 @@ uint32_t TCPSocket::receiveData(byte* buffer, uint32_t max_size_to_read) {
     memset(&timeout, 0, sizeof(timeout));
     //timeout.tv_usec = 1;
     errno = 0;
-    status = select(socket_descriptor + 1, nullptr, &sock_des, nullptr, &timeout);  // CAREFUL: need to ask for fds than can be WRITTEN, not READABLE
-    //status = select(socket_descriptor + 1, &sock_des, nullptr, nullptr, &timeout);
+    status = select(socket_descriptor + 1, &sock_des, nullptr, nullptr, &timeout);  // CAREFUL: need to ask for fds than can be WRITTEN, not READABLE
     if (status >= 0) {
       if (FD_ISSET(socket_descriptor, &sock_des) > 0) {
         int32_t error_state = 0;
         socklen_t sizeofint = sizeof(int32_t);
+        errno = 0;
         int32_t result = getsockopt(socket_descriptor, SOL_SOCKET, SO_ERROR, &error_state, &sizeofint);
         if (result == 0) {
           if (error_state != 0) {
-            printf("Query error value: %s\n", strerror(error_state));
+            error_printf("Query error value: %s\n", strerror(error_state));
           }
           else {
-            //printf("Receive: no error\n");
             errno = 0;
             status = recv(socket_descriptor, buffer, max_size_to_read, 0);
             if (errno != 0) {
-              //printf("Receive data: %s\n", strerror(errno));
+              //error_printf("Receive data: %s\n", strerror(errno));
+              if (errno == EINVAL) {
+                error_printf("Receive data: EINVAL\n");
+              }
+              else if (errno == EWOULDBLOCK) {
+                error_printf("Receive data: EWOULDBLOCK\n");
+              }
+              else {
+                error_printf("WEA\n");
+              }
             }
             if (status >= 0) {
               bytes_read = (uint32_t)status;
@@ -273,9 +299,15 @@ uint32_t TCPSocket::receiveData(byte* buffer, uint32_t max_size_to_read) {
           }
         }
         else if (errno != 0) {
-          printf("getsockopt: %s\n", strerror(errno));
+          error_printf("getsockopt: %s\n", strerror(errno));
         }
       }
+      else {
+        error_printf("Socket not ready to receive\n");
+      }
+    }
+    else {
+      printf("Receive data select(): %s\n", strerror(errno));
     }
   }
 
@@ -290,19 +322,19 @@ bool TCPSocket::close() {
   errno = 0;
   int32_t status = getsockopt(socket_descriptor, SOL_SOCKET, SO_ERROR, &error_state, &sizeofint);
   if (status == -1) {
-    printf("getsockopt: %s\n", strerror(errno));
+    error_printf("getsockopt: %s\n", strerror(errno));
   }
   // at this point, any error in socket_descriptor should have been cleared
   errno = 0;
   shutdown(socket_descriptor, SHUT_RDWR);
   if (errno != 0) {
-    printf("shutdown: %s\n", strerror(errno));
+    error_printf("shutdown: %s\n", strerror(errno));
   }
 
   errno = 0;
   bool result = ::close(socket_descriptor) > -1;
   if (errno != 0) {
-    printf("Close: %s\n", strerror(errno));
+    error_printf("Close: %s\n", strerror(errno));
   }
 
   closed = result;
@@ -340,15 +372,29 @@ bool TCPSocket::isConnected() const {
 
   int32_t true_int_value = 1;
   socklen_t sizeofunsignedint = sizeof(uint32_t);
-  uint32_t max_buffer_size = 0;
+  uint32_t max_recv_buffer_size = 0;
   setsockopt(socket_descriptor, SOL_SOCKET, SO_REUSEADDR, (int32_t*)&true_int_value, sizeof(int32_t));  // CAREFUL: this violates TCP/IP protocol making it unlikely but possible for the next program that binds on that port to pick up packets intended for the original program
-  getsockopt(socket_descriptor, SOL_SOCKET, SO_RCVBUF, (uint32_t*)&max_buffer_size, &sizeofunsignedint);
-  printf("Receive buffer size: %u\n", max_buffer_size);
-  setsockopt(socket_descriptor, SOL_SOCKET, SO_RCVBUF, (uint32_t*)&max_buffer_size, sizeofunsignedint);
-  getsockopt(socket_descriptor, SOL_SOCKET, SO_RCVBUF, (uint32_t*)&max_buffer_size, &sizeofunsignedint);
-  printf("Receive buffer size: %u\n", max_buffer_size);
+  
+  getsockopt(socket_descriptor, SOL_SOCKET, SO_RCVBUF, (uint32_t*)&max_recv_buffer_size, &sizeofunsignedint);
+  printf("Receive buffer size: %u\n", max_recv_buffer_size);
+  //max_recv_buffer_size *= 4;
+  setsockopt(socket_descriptor, SOL_SOCKET, SO_RCVBUF, (uint32_t*)&max_recv_buffer_size, sizeofunsignedint);
+  getsockopt(socket_descriptor, SOL_SOCKET, SO_RCVBUF, (uint32_t*)&max_recv_buffer_size, &sizeofunsignedint);
+  printf("Receive buffer size: %u\n", max_recv_buffer_size);
+
+
+  uint32_t max_send_buffer_size = 0;
+  getsockopt(socket_descriptor, SOL_SOCKET, SO_SNDBUF, (uint32_t*)&max_send_buffer_size, &sizeofunsignedint);
+  printf("Send buffer size: %u\n", max_send_buffer_size);
+  //max_send_buffer_size *= 8;
+  setsockopt(socket_descriptor, SOL_SOCKET, SO_SNDBUF, (uint32_t*)&max_send_buffer_size, sizeofunsignedint);
+  getsockopt(socket_descriptor, SOL_SOCKET, SO_SNDBUF, (uint32_t*)&max_send_buffer_size, &sizeofunsignedint);
+  printf("Send buffer size: %u\n", max_send_buffer_size);
+  
+  //setsockopt(socket_descriptor, IPPROTO_TCP, TCP_NODELAY, (int32_t*)&true_int_value, sizeof(int32_t));
+
   // TODO: give the option to SO_NOSIGPIPE to be flagable
-  //setsockopt(socket_descriptor, SOL_SOCKET, SO_NOSIGPIPE, (int32_t*)&true_int_value, sizeof(int32_t));
+  setsockopt(socket_descriptor, SOL_SOCKET, SO_NOSIGPIPE, (int32_t*)&true_int_value, sizeof(int32_t));
 
   if (type == Type::NonBlock) {
     fcntl(socket_descriptor, F_SETFL, O_NONBLOCK);
@@ -400,11 +446,11 @@ TCPSocket* TCPListener::accept() {
     }
     else {
       if (errno != 0) {
-        printf("Accept: %s\n", strerror(errno));
+        error_printf("Accept: %s\n", strerror(errno));
       }
 
       if (errno == EAGAIN || errno == EWOULDBLOCK) {  // looks like in MacOSX the following is defined: #define EWOULDBLOCK EAGAIN. But does ::accept() return both?
-        printf("Will try to accept connection later...\n");
+        error_printf("Will try to accept connection later...\n");
         listening_status = ListeningStatus::WaitingForAccept;
       }
     }
@@ -427,10 +473,10 @@ TCPSocket* TCPListener::accept() {
         int32_t result = getsockopt(socket_descriptor, SOL_SOCKET, SO_ERROR, &error_state, &sizeofint);
         if (result == 0) {
           if (error_state != 0) {
-            printf("Query error value: %s\n", strerror(error_state));
+            error_printf("Query error value: %s\n", strerror(error_state));
           }
           else {
-            printf("No error\n");
+            error_printf("No error\n");
             int32_t accepted_socket_des = ::accept(socket_descriptor, nullptr, nullptr);
             if (accepted_socket_des >= 0 && accepted_socket) {
               accepted_socket->close();
@@ -443,7 +489,7 @@ TCPSocket* TCPListener::accept() {
           }
         }
         if (errno != 0) {
-          printf("getsockopt: %s\n", strerror(errno));
+          error_printf("getsockopt: %s\n", strerror(errno));
         }
 
         // int accepted_socket_des = ::accept(socket_descriptor, nullptr, nullptr);
@@ -457,7 +503,7 @@ TCPSocket* TCPListener::accept() {
       }
     }
     else if (errno != 0) {
-      printf("Select: %s\n", strerror(errno));
+      error_printf("Select: %s\n", strerror(errno));
     }
   }
 
@@ -478,19 +524,19 @@ bool TCPListener::close() {
   errno = 0;
   int32_t status = getsockopt(socket_descriptor, SOL_SOCKET, SO_ERROR, &error_state, &sizeofint);
   if (status == -1) {
-    printf("getsockopt: %s\n", strerror(errno));
+    error_printf("getsockopt: %s\n", strerror(errno));
   }
   // at this point, any error in socket_descriptor should have been cleared
   errno = 0;
   shutdown(socket_descriptor, SHUT_RDWR);
   if (errno != 0) {
-    printf("shutdown: %s\n", strerror(errno));
+    error_printf("shutdown: %s\n", strerror(errno));
   }
 
   errno = 0;
   success = (::close(socket_descriptor) > -1) | success;
   if (errno != 0) {
-    printf("Close: %s\n", strerror(errno));
+    error_printf("Close: %s\n", strerror(errno));
   }
 
   listening_status = ListeningStatus::NotListening;

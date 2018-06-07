@@ -311,7 +311,7 @@ void NetworkTask(byte* send_ptr) {
       g_chrono.stop();
       elapsed_time += g_chrono.timeAsMilliseconds();
       //printf("elapsed_time: %.2f\n", elapsed_time);
-      if (elapsed_time >= 33.3333f) {
+      if (elapsed_time >= 330.3333f) {
         //printf("Can send data\n");
         elapsed_time = 0.0f;
         g_can_send_data = true;
@@ -372,6 +372,7 @@ void NetworkTask(byte* send_ptr) {
             if (socket->sendData(send_ptr, g_format.fmt.pix.sizeimage)) {
               g_can_send_data = false;
               g_network_state = NetworkState::PeerConnected;
+              printf("Sent %u bytes\n", g_format.fmt.pix.sizeimage);
             }
           }
           free(buffer);
@@ -385,7 +386,7 @@ void NetworkTask(byte* send_ptr) {
   }
 }
 
-int __main() {
+int main() {
 	TCPListener listener(Socket::Type::NonBlock);
 	listener.bind(14194);
 	listener.listen();
@@ -396,27 +397,49 @@ int __main() {
 	}
 	printf("Accepted connection\n");
 
-	byte i = 0;
-	while (i < 255) {
-		byte buffer[1024];
-		memset(buffer, 0, 1024);
-		buffer[1] = i;
-		while (!socket->sendData(buffer, 1024)) {
-			//printf("Data sent successfuly\n");
-			printf("Big trouble %u", i);
-		}
-		//else {
-			//printf("Data sent wrong\n");
-		//}
-		printf("Data sent successfuly %u\n", i);
+	byte buffer[1000000];
+	memset(buffer, 0, 1000000);
+	buffer[1] = 14;
 
-		++i;
-	}
+	uint32_t g_data_sent = 0;
+  uint32_t data_sent = 0;
+
+  for (int i = 0; i < 10; ++i) {
+    g_data_sent = 0;
+    data_sent = 0;
+    while (g_data_sent <= 1000000) {
+      data_sent = socket->sendData(buffer + g_data_sent, 1000000 - g_data_sent);
+      if (data_sent > 0) {
+        printf("Sent %u bytes\n", data_sent);
+      }
+      g_data_sent += data_sent;
+    }
+
+    printf("\n");
+  }
+
+  // uint32_t g_data_read = 0;
+  // uint32_t data_read = 0;
+  // while (g_data_read < 1000000) {
+  //   data_read = socket->receiveData(buffer + g_data_read, 1000000);
+  //   g_data_read += data_read;
+  // }
+
+  // if (buffer[1] == 15) {
+  //   printf("YEAH!\n");
+  // }
+
+  Chrono c;
+  c.start();
+
+  c.stop();
+  printf("Time: %.2f ms\n", c.timeAsMilliseconds());
+	printf("Data sent successfuly\n");
 
 	return 0;
 }
 
-int main(int argc, char** argv) {
+int __main(int argc, char** argv) {
   signal(SIGINT, InterruptSignalHandler);
 
   g_can_sync_network = false;
@@ -471,15 +494,15 @@ int main(int argc, char** argv) {
 
       //printf("Swapping buffers...\n");
 
-      read_ptr      = buffers[(index) % 3];
-      read_copy_ptr = buffers[(index + 1) % 3];
-      process_ptr   = buffers[(index + 2) % 3];
-      send_ptr      = buffers[(index + 3) % 3];
-      ++index;
-      if (index > 1000000) {
-        // to avoid overflows in long executions
-        index = 0;
-      }
+      // read_ptr      = buffers[(index) % 3];
+      // read_copy_ptr = buffers[(index + 1) % 3];
+      // process_ptr   = buffers[(index + 2) % 3];
+      // send_ptr      = buffers[(index + 3) % 3];
+      // ++index;
+      // if (index > 1000000) {
+      //   // to avoid overflows in long executions
+      //   index = 0;
+      // }
     }
 
 
