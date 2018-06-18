@@ -380,6 +380,7 @@ void InitializeOpenGLStuff() {
 
 void AddAlphaChannelData(byte** buffer, uint32_t size, uint32_t new_size) {
   byte* aux_buffer = (byte*)malloc(new_size);
+  memset(aux_buffer, 0, new_size);
 
   byte* ptr   = *buffer;
   byte* other = aux_buffer;
@@ -393,13 +394,13 @@ void AddAlphaChannelData(byte** buffer, uint32_t size, uint32_t new_size) {
     other += 4;
   }
   // store a ref to the old buffer
-  other = *buffer;
+  ptr = *buffer;
 
   // return a pointer to the new (resized) buffer
   *buffer = aux_buffer;
 
   // release old buffer
-  free(other);
+  free(ptr);
 }
 
 void NetworkTask() {
@@ -432,30 +433,26 @@ void NetworkTask() {
         break;
       }
       case NetworkState::Receiving: {
+        uint32_t bytes_read = 0;
+        g_bytes_read = 0;
+
         if (g_can_receive_data == true) {
-          //ignore_sync_flag = false;
-          uint32_t read_bytes = 0;
           while (g_bytes_read < g_image_width * g_image_height * 3) {
-            read_bytes = g_socket.receiveData(g_recv_data_ptr + g_bytes_read, g_image_width * g_image_height * 3);
+            bytes_read = g_socket.receiveData(g_recv_data_ptr + g_bytes_read, (g_image_width * g_image_height * 3) - g_bytes_read);
             
-            if (read_bytes == 0 && g_bytes_read == 0) {
+            if (bytes_read == 0) {
               ignore_sync_flag = true;
-              //printf("First\n");
+              // should never happen
+              //printf("But its happening\n");
 
-              break;
-            }
-            else if (read_bytes == 0 && (g_bytes_read > 0 && g_bytes_read < g_image_width * g_image_height * 3)) {
-              //ignore_sync_flag = true;
-              //printf("Second\n");
-
-              break;
+              //break;
             }
             else {
               ignore_sync_flag = false;
-              printf("Data received: %u bytes\n", read_bytes);
+              //printf("Data received: %u bytes\n", bytes_read);
             }
 
-            g_bytes_read += read_bytes;
+            g_bytes_read += bytes_read;
           }
 
           if (!ignore_sync_flag) {
@@ -493,27 +490,17 @@ void NetworkTask() {
       g_can_receive_data = true;
     }
 
-    // for every loop, reset bytes read
     g_bytes_read = 0;
   } // while(!should_finish)
 
   g_socket.close();
 }
 
-int main() {
+int __main() {
   TCPSocket socket(Socket::Type::NonBlock);
   while (!socket.connect("127.0.0.1", 14194)) {
 
   }
-
-
-  /*
-  
-  TODO: the current version can send 1MB with no problem.
-  But if you try to send 1MB way too fast, the program 
-  does not work and seems to lost packets??
-
-  */
 
 
   printf("Connected\n");
@@ -529,7 +516,7 @@ int main() {
   for (int i = 0; i < 10; ++i) {
     g_data_read = 0;
     data_read = 0;
-    while (g_data_read <= 1000000) {
+    while (g_data_read < 1000000) {
       data_read = socket.receiveData(buffer + g_data_read, 1000000 - g_data_read);
       if (data_read > 0) {
         printf("Data read: %u bytes\n", data_read);
@@ -551,7 +538,87 @@ int main() {
   return 0;
 }
 
-int __main() {
+int main() {
+  signal(SIGINT, InterruptSignalHandler);
+
+  while (!g_socket.connect("127.0.0.1", 14194)) {
+
+  }
+
+  InitializeGraphics();
+  InitializeOpenGLStuff();
+
+  g_draw_buffer = (byte*)malloc(g_image_width * g_image_height * 4);
+  memset(g_draw_buffer, 0, g_image_width * g_image_height * 4);
+  g_draw_buffer_ptr = g_draw_buffer;
+  for (uint32_t i = 0; i < g_image_width * g_image_height * 4; i += 4) {
+    *(g_draw_buffer_ptr + 3) = 255;
+    g_draw_buffer_ptr += 4;
+  }
+  g_draw_buffer_ptr = g_draw_buffer;
+
+  g_recv_data_buffer = (byte*)malloc(g_image_width * g_image_height * 4);
+  memset(g_recv_data_buffer, 0, g_image_width * g_image_height * 4);
+  g_recv_data_ptr = g_recv_data_buffer;
+
+  g_frame_count = 0;
+  Chrono c;
+  while (!glfwWindowShouldClose(g_window)) {
+    c.start();
+    glClear(GL_COLOR_BUFFER_BIT);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 
+      g_image_width, g_image_height, GL_RGBA, GL_UNSIGNED_BYTE, g_recv_data_ptr);
+
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+
+    c.stop();
+    //printf("Frame time: %.2f ms\n", c.timeAsMilliseconds());
+
+
+    // Network stuff
+    uint32_t bytes_read = 0;
+    g_bytes_read = 0;
+    while (g_bytes_read < g_image_width * g_image_height * 3) {
+      bytes_read = g_socket.receiveData(g_recv_data_ptr + g_bytes_read, (g_image_width * g_image_height * 3) - g_bytes_read);
+
+      g_bytes_read += bytes_read;
+    }
+
+    AddAlphaChannelData(&g_recv_data_ptr, g_image_width * g_image_height * 3, g_image_width * g_image_height * 4);
+    printf("\n%u %u %u %u in frame: %u\n", g_recv_data_ptr[20000], g_recv_data_ptr[20001], g_recv_data_ptr[20002], g_recv_data_ptr[20003], g_frame_count.load());
+    printf("\n%u %u %u %u in frame: %u\n", g_draw_buffer_ptr[20000], g_draw_buffer_ptr[20001], g_draw_buffer_ptr[20002], g_draw_buffer_ptr[20003], g_frame_count.load());
+
+    // Swap buffers
+    // if (g_recv_data_ptr == g_recv_data_buffer) {
+    //   printf("Once upon a frame...\n");
+    //   g_recv_data_ptr = g_draw_buffer;
+    //   g_draw_buffer_ptr = g_recv_data_buffer;
+    // }
+    // else {
+    //   g_recv_data_ptr = g_recv_data_buffer;
+    //   g_draw_buffer_ptr = g_draw_buffer;
+    // }
+
+    ++g_frame_count;
+
+    glfwSwapBuffers(g_window);
+    glfwPollEvents();
+  }
+
+  if (g_draw_buffer) {
+    free(g_draw_buffer);
+  }
+  if (g_recv_data_buffer) {
+    free(g_recv_data_buffer);
+  }
+
+  glfwDestroyWindow(g_window);
+  glfwTerminate();
+
+  return 0;
+}
+
+int ___main() {
   signal(SIGINT, InterruptSignalHandler);
 
   std::thread network_thread(NetworkTask);
@@ -604,13 +671,22 @@ int __main() {
     //  because otherwise the program could be hung.
     if (g_can_sync_network == true && g_network_state != NetworkState::NotConnected) {
       printf("Switching pointers (frame %u)\n", g_frame_count.load());
-      if (g_draw_buffer_ptr == g_draw_buffer) {
-        g_draw_buffer_ptr = g_recv_data_buffer;
-        g_recv_data_ptr = g_draw_buffer;
-      }
-      else {
-        g_draw_buffer_ptr = g_draw_buffer;
-        g_recv_data_ptr = g_recv_data_buffer;
+      // if (g_draw_buffer_ptr == g_draw_buffer) {
+      //   g_draw_buffer_ptr = g_recv_data_buffer;
+      //   g_recv_data_ptr = g_draw_buffer;
+      // }
+      // else {
+      //   g_draw_buffer_ptr = g_draw_buffer;
+      //   g_recv_data_ptr = g_recv_data_buffer;
+      // }
+
+      while (g_can_receive_data == true) {
+        // Spin lock
+        // Because there are no mutexes, g_can_receive_data
+        // can still be true in NetworkTask(),
+        // so wait here to be false and don't mess things up
+
+        // fuck, seems like this never happens
       }
 
       g_can_sync_network = false;
@@ -626,18 +702,18 @@ int __main() {
   // CLEANUP
   network_thread.join();
 
-  // if (g_draw_buffer) {
-  //   free(g_draw_buffer);
-  // }
-  // if (g_recv_data_buffer) {
-  //   free(g_recv_data_buffer);
-  // }
-  if (g_draw_buffer_ptr) {
-    free(g_draw_buffer_ptr);
+  if (g_draw_buffer) {
+    free(g_draw_buffer);
   }
-  if (g_recv_data_ptr) {
-    free(g_recv_data_ptr);
+  if (g_recv_data_buffer) {
+    free(g_recv_data_buffer);
   }
+  // if (g_draw_buffer_ptr) {
+  //   free(g_draw_buffer_ptr);
+  // }
+  // if (g_recv_data_ptr) {
+  //   free(g_recv_data_ptr);
+  // }
 
   glfwDestroyWindow(g_window);
   glfwTerminate();

@@ -45,6 +45,7 @@ struct v4l2_format{struct fmt{struct pix{int sizeimage;}pix;}fmt;};
 struct v4l2_buffer g_bufferinfo;
 struct v4l2_format g_format;
 int32_t g_fd = -1;
+uint32_t g_bytes_sent = 0;
 bool g_program_should_finish = false;
 std::atomic<bool> g_can_read_data_buffer;
 std::atomic<bool> g_can_send_data;
@@ -362,31 +363,45 @@ void NetworkTask(byte* send_ptr) {
           //   ptr += 3;
           // }
 
-          //byte buffer[921600]; // this seems to give a segmentation fault
-          byte* buffer = (byte*)malloc(921600);
-          memset(buffer, 0, 921600);
-          buffer[1] = 14;
-          buffer[130000] = 15;
+          uint32_t bytes_sent = 0;
+          g_bytes_sent = 0;
           if (g_can_send_data == true) {
-            //if (socket->sendData(buffer, 921600)) {
-            if (socket->sendData(send_ptr, g_format.fmt.pix.sizeimage)) {
-              g_can_send_data = false;
-              g_network_state = NetworkState::PeerConnected;
-              printf("Sent %u bytes\n", g_format.fmt.pix.sizeimage);
+            g_can_send_data = false;
+            g_network_state = NetworkState::PeerConnected;
+
+            while (g_bytes_sent < g_format.fmt.pix.sizeimage) {
+              bytes_sent = socket->sendData(send_ptr + g_bytes_sent, g_format.fmt.pix.sizeimage - g_bytes_sent);
+              
+              if (bytes_sent == 0) {
+                g_can_send_data = true;
+                g_network_state = NetworkState::Sending;
+
+                printf("Sent zero bytes, remaining: %u\n", g_format.fmt.pix.sizeimage - g_bytes_sent);
+
+                //break;
+              }
+
+              g_bytes_sent += bytes_sent;
             }
+
+            if (g_bytes_sent == g_format.fmt.pix.sizeimage) {
+              g_bytes_sent = 0;
+            }
+            
+            printf("Sent %u bytes\n", g_bytes_sent);
           }
-          free(buffer);
 
           break;
         }
       } // switch
 
+      //g_bytes_sent = 0;
       g_can_sync_network = true;
     } // g_can_start_network == true
   }
 }
 
-int main() {
+int __main() {
 	TCPListener listener(Socket::Type::NonBlock);
 	listener.bind(14194);
 	listener.listen();
@@ -407,7 +422,8 @@ int main() {
   for (int i = 0; i < 10; ++i) {
     g_data_sent = 0;
     data_sent = 0;
-    while (g_data_sent <= 1000000) {
+    while (g_data_sent < 1000000) {
+      //printf("g_data_sent: %u\n", g_data_sent);
       data_sent = socket->sendData(buffer + g_data_sent, 1000000 - g_data_sent);
       if (data_sent > 0) {
         printf("Sent %u bytes\n", data_sent);
@@ -439,7 +455,51 @@ int main() {
 	return 0;
 }
 
-int __main(int argc, char** argv) {
+int main() {
+  g_format.fmt.pix.sizeimage = 640 * 480 * 3;
+
+  TCPListener listener(Socket::Type::NonBlock);
+  listener.bind(14194);
+  listener.listen();
+
+  TCPSocket* socket = nullptr;
+  while (socket == nullptr) {
+    socket = listener.accept();
+  }
+
+  byte* send_ptr = (byte*)malloc(g_format.fmt.pix.sizeimage);
+
+  uint32_t g_data_sent = 0;
+  uint32_t r = 0, g = 128, b = 255;
+  while (true) {
+    byte* ptr = send_ptr;
+    for (uint32_t i = 0; i < g_format.fmt.pix.sizeimage; i += 3) {
+      *(ptr + 0) = r;
+      *(ptr + 1) = g;
+      *(ptr + 2) = b;
+
+      ptr += 3;
+    }
+    r++; g++; b++;
+    r %= 255; g %= 255; b %= 255;
+
+    uint32_t data_sent = 0;
+    g_data_sent = 0;
+    while (g_data_sent < g_format.fmt.pix.sizeimage) {
+      data_sent = socket->sendData(send_ptr + g_data_sent, g_format.fmt.pix.sizeimage - g_data_sent);
+      if (data_sent > 0) {
+        printf("Sent %u bytes\n", data_sent);
+      }
+      g_data_sent += data_sent;
+    }
+  }
+
+  free(send_ptr);
+
+  return true;
+}
+
+int ___main(int argc, char** argv) {
   signal(SIGINT, InterruptSignalHandler);
 
   g_can_sync_network = false;

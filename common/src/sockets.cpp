@@ -13,7 +13,7 @@
 #endif
 
 #define error_printf(fmt, ...) (printf(fmt, ##__VA_ARGS__))
-#define IGNORE_ERROR_PRINTF 0
+#define IGNORE_ERROR_PRINTF 1
 #if IGNORE_ERROR_PRINTF == 1
   #undef error_printf
   #define error_printf(fmt, ...) (0)
@@ -132,6 +132,10 @@ uint32_t TCPSocket::sendData(byte* buffer, uint32_t buffer_size) {
   uint32_t bytes_sent = 0;
   int32_t status = 0;
 
+  if (buffer_size == 0) {
+    printf("ME CAGO EN LA WEA AGAIN\n");
+  }
+
   if (sending_status == SendingStatus::CanSend) {
     errno = 0;
     status = ::send(socket_descriptor, buffer, buffer_size, 0);
@@ -179,6 +183,7 @@ uint32_t TCPSocket::sendData(byte* buffer, uint32_t buffer_size) {
     memset(&timeout, 0, sizeof(timeout));
     //timeout.tv_usec = 1;
     errno = 0;
+
     status = select(socket_descriptor + 1, nullptr, &sock_des, nullptr, &timeout); // CAREFUL: test this
     if (status >= 0) {
       if (FD_ISSET(socket_descriptor, &sock_des) > 0) {
