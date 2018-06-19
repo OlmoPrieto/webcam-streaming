@@ -548,9 +548,12 @@ int main() {
   InitializeGraphics();
   InitializeOpenGLStuff();
 
+  byte** draw_ptr = nullptr;
+  byte** recv_ptr = nullptr;
+
   g_draw_buffer = (byte*)malloc(g_image_width * g_image_height * 4);
   memset(g_draw_buffer, 0, g_image_width * g_image_height * 4);
-  g_draw_buffer_ptr = g_draw_buffer;
+  byte* g_draw_buffer_ptr = g_draw_buffer;
   for (uint32_t i = 0; i < g_image_width * g_image_height * 4; i += 4) {
     *(g_draw_buffer_ptr + 3) = 255;
     g_draw_buffer_ptr += 4;
@@ -561,13 +564,16 @@ int main() {
   memset(g_recv_data_buffer, 0, g_image_width * g_image_height * 4);
   g_recv_data_ptr = g_recv_data_buffer;
 
+  draw_ptr = &g_draw_buffer;
+  recv_ptr = &g_recv_data_buffer;
+
   g_frame_count = 0;
   Chrono c;
   while (!glfwWindowShouldClose(g_window)) {
     c.start();
     glClear(GL_COLOR_BUFFER_BIT);
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 
-      g_image_width, g_image_height, GL_RGBA, GL_UNSIGNED_BYTE, g_recv_data_ptr);
+      g_image_width, g_image_height, GL_RGBA, GL_UNSIGNED_BYTE, *draw_ptr);
 
     glDrawArrays(GL_TRIANGLES, 0, 6);
 
@@ -579,25 +585,26 @@ int main() {
     uint32_t bytes_read = 0;
     g_bytes_read = 0;
     while (g_bytes_read < g_image_width * g_image_height * 3) {
-      bytes_read = g_socket.receiveData(g_recv_data_ptr + g_bytes_read, (g_image_width * g_image_height * 3) - g_bytes_read);
-
+      bytes_read = g_socket.receiveData((*recv_ptr) + g_bytes_read, (g_image_width * g_image_height * 3) - g_bytes_read);
       g_bytes_read += bytes_read;
     }
 
-    AddAlphaChannelData(&g_recv_data_ptr, g_image_width * g_image_height * 3, g_image_width * g_image_height * 4);
-    printf("\n%u %u %u %u in frame: %u\n", g_recv_data_ptr[20000], g_recv_data_ptr[20001], g_recv_data_ptr[20002], g_recv_data_ptr[20003], g_frame_count.load());
-    printf("\n%u %u %u %u in frame: %u\n", g_draw_buffer_ptr[20000], g_draw_buffer_ptr[20001], g_draw_buffer_ptr[20002], g_draw_buffer_ptr[20003], g_frame_count.load());
+    AddAlphaChannelData(recv_ptr, g_image_width * g_image_height * 3, g_image_width * g_image_height * 4);
+    printf("\n%u %u %u %u in frame: %u\n", *((*recv_ptr) + 20000), *((*recv_ptr) + 20001), 
+      *((*recv_ptr) + 20002), *((*recv_ptr) + 20003), g_frame_count.load());
+    printf("\n%u %u %u %u in frame: %u\n", *((*draw_ptr) + 20000), *((*draw_ptr) + 20001), 
+      *((*draw_ptr) + 20002), *((*draw_ptr) + 20003), g_frame_count.load());
 
     // Swap buffers
-    // if (g_recv_data_ptr == g_recv_data_buffer) {
-    //   printf("Once upon a frame...\n");
-    //   g_recv_data_ptr = g_draw_buffer;
-    //   g_draw_buffer_ptr = g_recv_data_buffer;
-    // }
-    // else {
-    //   g_recv_data_ptr = g_recv_data_buffer;
-    //   g_draw_buffer_ptr = g_draw_buffer;
-    // }
+    if (recv_ptr == &g_recv_data_buffer) {
+      printf("Once upon a frame...\n");
+      recv_ptr = &g_draw_buffer;
+      draw_ptr = &g_recv_data_buffer;
+    }
+    else {
+      recv_ptr = &g_recv_data_buffer;
+      draw_ptr = &g_draw_buffer;
+    }
 
     ++g_frame_count;
 
