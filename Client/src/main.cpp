@@ -27,28 +27,28 @@ enum class NetworkState {
 // GLOBAL VARIABLES
 GLFWwindow* g_window = nullptr;
 //byte* g_data = nullptr;
-uint32_t g_window_width = 640;
-uint32_t g_window_height = 480;
-uint32_t g_image_width = 640;
-uint32_t g_image_height = 480;
-uint32_t g_bytes_read = 0;
-bool g_program_should_finish = false;
+uint32_t g_window_width       = 640;
+uint32_t g_window_height      = 480;
+uint32_t g_image_width        = 640;
+uint32_t g_image_height       = 480;
+uint32_t g_bytes_read         = 0;
+bool g_program_should_finish  = false;
 
 std::atomic<uint64_t> g_frame_count;
 
-GLuint g_vao_id = 0;
-GLuint g_vertex_buffer_id = 0;
+GLuint g_vao_id                 = 0;
+GLuint g_vertex_buffer_id       = 0;
 GLuint g_other_vertex_shader_id = 0;
-GLuint g_vertex_shader_id = 0;
-GLuint g_fragment_shader_id = 0;
-GLuint g_program_id = 0;
-GLuint g_uvs_id = 0;
-GLuint g_texture_id = 0;
+GLuint g_vertex_shader_id       = 0;
+GLuint g_fragment_shader_id     = 0;
+GLuint g_program_id             = 0;
+GLuint g_uvs_id                 = 0;
+GLuint g_texture_id             = 0;
 
-byte* g_recv_data_ptr = nullptr;
-byte* g_recv_data_buffer = nullptr;
-byte* g_draw_buffer_ptr = nullptr;
-byte* g_draw_buffer = nullptr;
+byte** g_recv_data_ptr    = nullptr;
+byte* g_recv_data_buffer  = nullptr;
+byte** g_draw_buffer_ptr  = nullptr;
+byte* g_draw_buffer       = nullptr;
 
 TCPSocket g_socket(Socket::Type::NonBlock);
 NetworkState g_network_state = NetworkState::NotConnected;
@@ -333,14 +333,7 @@ void InitializeOpenGLStuff() {
   if (!g_draw_buffer) {
     printf("Error allocating memory\n");
   }
-  g_draw_buffer_ptr = g_draw_buffer;
-  memset(g_draw_buffer_ptr, 0, g_image_width * g_image_height * 4);
-  // for (unsigned int i = 0; i < g_image_width * g_image_height; i++) {
-  //  *ptr = 0xFF;
-  //  // *(ptr+1) = 0xFF;
-  //  // *(ptr+2) = 0x00;
-  //  ptr += 3;
-  // }
+  memset(g_draw_buffer, 0, g_image_width * g_image_height * 4);
   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, g_image_width, g_image_height, 
     0, GL_RGBA, GL_UNSIGNED_BYTE, g_draw_buffer);
 
@@ -408,7 +401,7 @@ void NetworkTask() {
 
   g_recv_data_buffer = (byte*)malloc(g_image_width * g_image_height * 4);
   memset(g_recv_data_buffer, 0, g_image_width * g_image_height * 4);
-  g_recv_data_ptr = g_recv_data_buffer;
+  g_recv_data_ptr = &g_recv_data_buffer;
 
   g_can_sync_network = false;
   g_can_receive_data = true;
@@ -438,59 +431,24 @@ void NetworkTask() {
 
         if (g_can_receive_data == true) {
           while (g_bytes_read < g_image_width * g_image_height * 3) {
-            bytes_read = g_socket.receiveData(g_recv_data_ptr + g_bytes_read, (g_image_width * g_image_height * 3) - g_bytes_read);
-            
-            if (bytes_read == 0) {
-              ignore_sync_flag = true;
-              // should never happen
-              //printf("But its happening\n");
-
-              //break;
-            }
-            else {
-              ignore_sync_flag = false;
-              //printf("Data received: %u bytes\n", bytes_read);
-            }
+            bytes_read = g_socket.receiveData((*g_recv_data_ptr) + g_bytes_read, (g_image_width * g_image_height * 3) - g_bytes_read);
 
             g_bytes_read += bytes_read;
           }
 
-          if (!ignore_sync_flag) {
-            printf("Received %u bytes\n", g_bytes_read);
-            printf("Received image (frame %u)\n", g_frame_count.load());
-            AddAlphaChannelData(&g_recv_data_ptr, g_image_width * g_image_height * 3, g_image_width * g_image_height * 4);
-            printf("\n%u %u %u %u\n", g_recv_data_ptr[20000], g_recv_data_ptr[20001], g_recv_data_ptr[20002], g_recv_data_ptr[20003]);
-            printf("\n%u %u %u %u\n", g_draw_buffer_ptr[20000], g_draw_buffer_ptr[20001], g_draw_buffer_ptr[20002], g_draw_buffer_ptr[20003]);
+          printf("Received %u bytes\n", g_bytes_read);
+          printf("Received image (frame %u)\n", g_frame_count.load());
+          AddAlphaChannelData(g_recv_data_ptr, g_image_width * g_image_height * 3, g_image_width * g_image_height * 4);
 
-            // byte* ptr = g_recv_data_ptr;
-            // for (uint32_t i = 0; i < g_image_width * g_image_height * 4; i += 4) {
-            //   *(ptr + 0) = 0;
-            //   *(ptr + 1) = 255;
-            //   *(ptr + 2) = 0;
-            //   *(ptr + 3) = 255;
+          g_network_state = NetworkState::Connected;
 
-            //   ptr += 4;
-            // }
-            g_network_state = NetworkState::Connected;
-          }
+          g_can_sync_network = true;
+          g_can_receive_data = false;
         }
 
         break;
       } // case NetworkState::Receiving
     } // switch
-
-    if (ignore_sync_flag == false) {
-      g_can_sync_network = true;
-      g_can_receive_data = false;
-    }
-    else { // ignore_sync_flag == true
-      ignore_sync_flag = false;
-
-      g_can_sync_network = false;
-      g_can_receive_data = true;
-    }
-
-    g_bytes_read = 0;
   } // while(!should_finish)
 
   g_socket.close();
@@ -538,94 +496,94 @@ int __main() {
   return 0;
 }
 
+// int ___main() {
+//   signal(SIGINT, InterruptSignalHandler);
+
+//   while (!g_socket.connect("127.0.0.1", 14194)) {
+
+//   }
+
+//   InitializeGraphics();
+//   InitializeOpenGLStuff();
+
+//   byte** draw_ptr = nullptr;
+//   byte** recv_ptr = nullptr;
+
+//   g_draw_buffer = (byte*)malloc(g_image_width * g_image_height * 4);
+//   memset(g_draw_buffer, 0, g_image_width * g_image_height * 4);
+//   byte* g_draw_buffer_ptr = g_draw_buffer;
+//   for (uint32_t i = 0; i < g_image_width * g_image_height * 4; i += 4) {
+//     *(g_draw_buffer_ptr + 3) = 255;
+//     g_draw_buffer_ptr += 4;
+//   }
+//   g_draw_buffer_ptr = g_draw_buffer;
+
+//   g_recv_data_buffer = (byte*)malloc(g_image_width * g_image_height * 4);
+//   memset(g_recv_data_buffer, 0, g_image_width * g_image_height * 4);
+//   g_recv_data_ptr = g_recv_data_buffer;
+
+//   draw_ptr = &g_draw_buffer;
+//   recv_ptr = &g_recv_data_buffer;
+
+//   g_frame_count = 0;
+//   Chrono c;
+//   while (!glfwWindowShouldClose(g_window)) {
+//     c.start();
+//     glClear(GL_COLOR_BUFFER_BIT);
+//     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 
+//       g_image_width, g_image_height, GL_RGBA, GL_UNSIGNED_BYTE, *draw_ptr);
+
+//     glDrawArrays(GL_TRIANGLES, 0, 6);
+
+//     c.stop();
+//     //printf("Frame time: %.2f ms\n", c.timeAsMilliseconds());
+
+
+//     // Network stuff
+//     uint32_t bytes_read = 0;
+//     g_bytes_read = 0;
+//     while (g_bytes_read < g_image_width * g_image_height * 3) {
+//       bytes_read = g_socket.receiveData((*recv_ptr) + g_bytes_read, (g_image_width * g_image_height * 3) - g_bytes_read);
+//       g_bytes_read += bytes_read;
+//     }
+
+//     AddAlphaChannelData(recv_ptr, g_image_width * g_image_height * 3, g_image_width * g_image_height * 4);
+//     printf("\n%u %u %u %u in frame: %u\n", *((*recv_ptr) + 20000), *((*recv_ptr) + 20001), 
+//       *((*recv_ptr) + 20002), *((*recv_ptr) + 20003), g_frame_count.load());
+//     printf("\n%u %u %u %u in frame: %u\n", *((*draw_ptr) + 20000), *((*draw_ptr) + 20001), 
+//       *((*draw_ptr) + 20002), *((*draw_ptr) + 20003), g_frame_count.load());
+
+//     // Swap buffers
+//     if (recv_ptr == &g_recv_data_buffer) {
+//       printf("Once upon a frame...\n");
+//       recv_ptr = &g_draw_buffer;
+//       draw_ptr = &g_recv_data_buffer;
+//     }
+//     else {
+//       recv_ptr = &g_recv_data_buffer;
+//       draw_ptr = &g_draw_buffer;
+//     }
+
+//     ++g_frame_count;
+
+//     glfwSwapBuffers(g_window);
+//     glfwPollEvents();
+//   }
+
+//   if (g_draw_buffer) {
+//     free(g_draw_buffer);
+//   }
+//   if (g_recv_data_buffer) {
+//     free(g_recv_data_buffer);
+//   }
+
+//   glfwDestroyWindow(g_window);
+//   glfwTerminate();
+
+//   return 0;
+// }
+
 int main() {
-  signal(SIGINT, InterruptSignalHandler);
-
-  while (!g_socket.connect("127.0.0.1", 14194)) {
-
-  }
-
-  InitializeGraphics();
-  InitializeOpenGLStuff();
-
-  byte** draw_ptr = nullptr;
-  byte** recv_ptr = nullptr;
-
-  g_draw_buffer = (byte*)malloc(g_image_width * g_image_height * 4);
-  memset(g_draw_buffer, 0, g_image_width * g_image_height * 4);
-  byte* g_draw_buffer_ptr = g_draw_buffer;
-  for (uint32_t i = 0; i < g_image_width * g_image_height * 4; i += 4) {
-    *(g_draw_buffer_ptr + 3) = 255;
-    g_draw_buffer_ptr += 4;
-  }
-  g_draw_buffer_ptr = g_draw_buffer;
-
-  g_recv_data_buffer = (byte*)malloc(g_image_width * g_image_height * 4);
-  memset(g_recv_data_buffer, 0, g_image_width * g_image_height * 4);
-  g_recv_data_ptr = g_recv_data_buffer;
-
-  draw_ptr = &g_draw_buffer;
-  recv_ptr = &g_recv_data_buffer;
-
-  g_frame_count = 0;
-  Chrono c;
-  while (!glfwWindowShouldClose(g_window)) {
-    c.start();
-    glClear(GL_COLOR_BUFFER_BIT);
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 
-      g_image_width, g_image_height, GL_RGBA, GL_UNSIGNED_BYTE, *draw_ptr);
-
-    glDrawArrays(GL_TRIANGLES, 0, 6);
-
-    c.stop();
-    //printf("Frame time: %.2f ms\n", c.timeAsMilliseconds());
-
-
-    // Network stuff
-    uint32_t bytes_read = 0;
-    g_bytes_read = 0;
-    while (g_bytes_read < g_image_width * g_image_height * 3) {
-      bytes_read = g_socket.receiveData((*recv_ptr) + g_bytes_read, (g_image_width * g_image_height * 3) - g_bytes_read);
-      g_bytes_read += bytes_read;
-    }
-
-    AddAlphaChannelData(recv_ptr, g_image_width * g_image_height * 3, g_image_width * g_image_height * 4);
-    printf("\n%u %u %u %u in frame: %u\n", *((*recv_ptr) + 20000), *((*recv_ptr) + 20001), 
-      *((*recv_ptr) + 20002), *((*recv_ptr) + 20003), g_frame_count.load());
-    printf("\n%u %u %u %u in frame: %u\n", *((*draw_ptr) + 20000), *((*draw_ptr) + 20001), 
-      *((*draw_ptr) + 20002), *((*draw_ptr) + 20003), g_frame_count.load());
-
-    // Swap buffers
-    if (recv_ptr == &g_recv_data_buffer) {
-      printf("Once upon a frame...\n");
-      recv_ptr = &g_draw_buffer;
-      draw_ptr = &g_recv_data_buffer;
-    }
-    else {
-      recv_ptr = &g_recv_data_buffer;
-      draw_ptr = &g_draw_buffer;
-    }
-
-    ++g_frame_count;
-
-    glfwSwapBuffers(g_window);
-    glfwPollEvents();
-  }
-
-  if (g_draw_buffer) {
-    free(g_draw_buffer);
-  }
-  if (g_recv_data_buffer) {
-    free(g_recv_data_buffer);
-  }
-
-  glfwDestroyWindow(g_window);
-  glfwTerminate();
-
-  return 0;
-}
-
-int ___main() {
   signal(SIGINT, InterruptSignalHandler);
 
   std::thread network_thread(NetworkTask);
@@ -635,37 +593,20 @@ int ___main() {
 
   g_draw_buffer = (byte*)malloc(g_image_width * g_image_height * 4);
   memset(g_draw_buffer, 0, g_image_width * g_image_height * 4);
-  g_draw_buffer_ptr = g_draw_buffer;
+  byte* ptr = g_draw_buffer;
   for (uint32_t i = 0; i < g_image_width * g_image_height * 4; i += 4) {
-    *(g_draw_buffer_ptr + 3) = 255;
-    g_draw_buffer_ptr += 4;
+    *(ptr + 3) = 255;
+    ptr += 4;
   }
-  g_draw_buffer_ptr = g_draw_buffer;
+  g_draw_buffer_ptr = &g_draw_buffer;
 
-  g_draw_buffer_ptr = g_recv_data_buffer;
-
-  byte r = 0;
-  byte g = 64;
-  byte b = 128;
   g_frame_count = 0;
   Chrono c;
   while (!glfwWindowShouldClose(g_window)) {
   	c.start();
     glClear(GL_COLOR_BUFFER_BIT);
-
-    // byte* ptr = g_draw_buffer;
-	  // memset(ptr, 0, g_image_width * g_image_height * 4);
-	  // for (unsigned int i = 0; i < g_image_width * g_image_height; i++) {
-	  // 	*ptr      = r;
-	  // 	*(ptr+1)  = g;
-	  // 	*(ptr+2)  = b;
-	  // 	*(ptr+3)  = 255;
-	  // 	ptr += 4;
-	  // }
-	  // r++; g++; b++;
-	  // r %= 255; g %= 255; b %= 255;
 	  glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 
-	  	g_image_width, g_image_height, GL_RGBA, GL_UNSIGNED_BYTE, g_draw_buffer_ptr);
+	  	g_image_width, g_image_height, GL_RGBA, GL_UNSIGNED_BYTE, *g_draw_buffer_ptr);
 
     glDrawArrays(GL_TRIANGLES, 0, 6);
 
@@ -678,14 +619,14 @@ int ___main() {
     //  because otherwise the program could be hung.
     if (g_can_sync_network == true && g_network_state != NetworkState::NotConnected) {
       printf("Switching pointers (frame %u)\n", g_frame_count.load());
-      // if (g_draw_buffer_ptr == g_draw_buffer) {
-      //   g_draw_buffer_ptr = g_recv_data_buffer;
-      //   g_recv_data_ptr = g_draw_buffer;
-      // }
-      // else {
-      //   g_draw_buffer_ptr = g_draw_buffer;
-      //   g_recv_data_ptr = g_recv_data_buffer;
-      // }
+      if (g_draw_buffer_ptr == &g_draw_buffer) {
+        g_draw_buffer_ptr = &g_recv_data_buffer;
+        g_recv_data_ptr   = &g_draw_buffer;
+      }
+      else {
+        g_draw_buffer_ptr = &g_draw_buffer;
+        g_recv_data_ptr   = &g_recv_data_buffer;
+      }
 
       while (g_can_receive_data == true) {
         // Spin lock
@@ -715,12 +656,6 @@ int ___main() {
   if (g_recv_data_buffer) {
     free(g_recv_data_buffer);
   }
-  // if (g_draw_buffer_ptr) {
-  //   free(g_draw_buffer_ptr);
-  // }
-  // if (g_recv_data_ptr) {
-  //   free(g_recv_data_ptr);
-  // }
 
   glfwDestroyWindow(g_window);
   glfwTerminate();
