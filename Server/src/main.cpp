@@ -71,12 +71,12 @@ void InterruptSignalHandler(int32_t param) {
   g_program_should_finish = true;
 }
 
-#ifdef __PLATFORM_LINUX__
 void InitializeVideoDevice(const char* device_path) {
+#ifdef __PLATFORM_LINUX__
   Chrono c;
   c.start();
 
-  int g_fd = -1;
+  g_fd = -1;
   errno = 0;
   if ((g_fd = open(device_path, O_RDWR)) < 0) {
     printf("open: %s\n", strerror(errno));
@@ -159,19 +159,21 @@ void InitializeVideoDevice(const char* device_path) {
   g_bufferinfo.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
   g_bufferinfo.memory = V4L2_MEMORY_USERPTR;
   g_bufferinfo.index = 0;
-  //g_bufferinfo.m.userptr = (unsigned long)read_ptr;
+  g_bufferinfo.m.userptr = (unsigned long)(*g_read_ptr);
   g_bufferinfo.length = g_format.fmt.pix.sizeimage;
 
   c.stop();
   printf("Time to init: %.2fms\n", c.timeAsMilliseconds());
+#endif
 }
 
 void EnableVideoStreaming() {
+#ifdef __PLATFORM_LINUX__  
   Chrono c;
   c.start();
 
   if (ioctl(g_fd, VIDIOC_QBUF, &g_bufferinfo) < 0) {
-    printf("Error: %s\n", strerror(errno));
+    printf("VIDIOC_QBUF: %s\n", strerror(errno));
     close(g_fd);
     return;
   }
@@ -189,9 +191,11 @@ void EnableVideoStreaming() {
   }
   c.stop();
   printf("Time to enable streaming: %.2fms\n", c.timeAsMilliseconds());
+#endif
 }
 
 void DisableVideoStreaming() {
+#ifdef __PLATFORM_LINUX__
   int32_t type = g_bufferinfo.type;
   errno = 0;
   // Deactivate streaming
@@ -200,14 +204,16 @@ void DisableVideoStreaming() {
     close(g_fd);
     exit(1);
   }
+#endif
 }
 
-void GrabCameraFrame(byte* target_buffer) {
+void GrabCameraFrame(byte** target_buffer) {
+#ifdef __PLATFORM_LINUX__
   Chrono c;
 
   c.start();
 
-  g_bufferinfo.m.userptr = (unsigned long)target_buffer;
+  g_bufferinfo.m.userptr = (unsigned long)(*target_buffer);
 
   errno = 0;
   // The buffer's waiting in the outgoing queue.
@@ -225,8 +231,8 @@ void GrabCameraFrame(byte* target_buffer) {
   }
   c.stop();
   printf("Time to get frame: %.2fms\n", c.timeAsMilliseconds());
-}
 #endif
+}
 
 void ProcessImage(byte* src_image, unsigned int src_size, 
   byte* dst_image, unsigned int dst_size, byte* out_data, unsigned int offset) {
@@ -265,16 +271,16 @@ void ProcessingTask() {
           break;
         }
         case ProcessingState::Processing: {
-          byte* ptr = *g_read_ptr;
-          for (uint32_t i = 0; i < g_format.fmt.pix.sizeimage; i += 3) {
-            *(ptr + 0) = r;
-            *(ptr + 1) = g;
-            *(ptr + 2) = b;
+          // byte* ptr = *g_read_ptr;
+          // for (uint32_t i = 0; i < g_format.fmt.pix.sizeimage; i += 3) {
+          //   *(ptr + 0) = r;
+          //   *(ptr + 1) = g;
+          //   *(ptr + 2) = b;
 
-            ptr += 3;
-          }
-          r++; g++; b++;
-          r %= 255; g %= 255; b %= 255;
+          //   ptr += 3;
+          // }
+          // r++; g++; b++;
+          // r %= 255; g %= 255; b %= 255;
 
           ProcessImage(*g_read_copy_ptr, g_format.fmt.pix.sizeimage, 
               *g_process_ptr, g_format.fmt.pix.sizeimage, nullptr, 0);
@@ -431,7 +437,7 @@ int __main() {
 	return 0;
 }
 
-int main() {
+int ___main() {
   g_format.fmt.pix.sizeimage = 640 * 480 * 3;
 
   TCPListener listener(Socket::Type::NonBlock);
@@ -475,7 +481,7 @@ int main() {
   return true;
 }
 
-int ___main(int argc, char** argv) {
+int main(int argc, char** argv) {
   signal(SIGINT, InterruptSignalHandler);
 
   g_can_sync_network = false;
@@ -483,7 +489,11 @@ int ___main(int argc, char** argv) {
   g_can_process_data = true;
   g_can_send_data = true;
   
+  #if defined(__PLATFORM_MACOSX__) || defined(__PLATFORM_WINDOWS__)
+  // No video streaming
+  #else
   g_format.fmt.pix.sizeimage = 640 * 480 * 3;
+  #endif
 
   byte* read_ptr      = nullptr;
   byte* read_copy_ptr = nullptr;
@@ -508,11 +518,11 @@ int ___main(int argc, char** argv) {
   std::thread process_image_thread(ProcessingTask);
 
   const char* device = (argc > 1) ? argv[1] : "/dev/video0";
-  //InitializeVideoDevice(device);
 
   #if defined(__PLATFORM_MACOSX__) || defined(__PLATFORM_WINDOWS__)
   // No video streaming
   #else
+  InitializeVideoDevice(device);
   EnableVideoStreaming();
   #endif
 
@@ -528,7 +538,7 @@ int ___main(int argc, char** argv) {
     g_can_read_data_buffer = true;
     g_can_start_network = true;
 
-    //GrabCameraFrame(read_ptr);
+    GrabCameraFrame(g_read_ptr);
 
     // sync point
     if (g_can_sync_processing == true && g_can_sync_network == true) {

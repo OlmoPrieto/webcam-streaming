@@ -399,7 +399,7 @@ bool TCPSocket::isConnected() const {
   //setsockopt(socket_descriptor, IPPROTO_TCP, TCP_NODELAY, (int32_t*)&true_int_value, sizeof(int32_t));
 
   // TODO: give the option to SO_NOSIGPIPE to be flagable
-  setsockopt(socket_descriptor, SOL_SOCKET, SO_NOSIGPIPE, (int32_t*)&true_int_value, sizeof(int32_t));
+  //setsockopt(socket_descriptor, SOL_SOCKET, SO_NOSIGPIPE, (int32_t*)&true_int_value, sizeof(int32_t));
 
   if (type == Type::NonBlock) {
     fcntl(socket_descriptor, F_SETFL, O_NONBLOCK);
