@@ -434,6 +434,10 @@ void NetworkTask() {
             bytes_read = g_socket.receiveData((*g_recv_data_ptr) + g_bytes_read, (g_image_width * g_image_height * 3) - g_bytes_read);
 
             g_bytes_read += bytes_read;
+
+            if (g_program_should_finish == true) {
+              break;
+            }
           }
 
           printf("Received %u bytes\n", g_bytes_read);
@@ -442,8 +446,9 @@ void NetworkTask() {
 
           g_network_state = NetworkState::Connected;
 
-          g_can_sync_network = true;
+          // The order is important
           g_can_receive_data = false;
+          g_can_sync_network = true;
         }
 
         break;
@@ -496,93 +501,6 @@ int __main() {
   return 0;
 }
 
-// int ___main() {
-//   signal(SIGINT, InterruptSignalHandler);
-
-//   while (!g_socket.connect("127.0.0.1", 14194)) {
-
-//   }
-
-//   InitializeGraphics();
-//   InitializeOpenGLStuff();
-
-//   byte** draw_ptr = nullptr;
-//   byte** recv_ptr = nullptr;
-
-//   g_draw_buffer = (byte*)malloc(g_image_width * g_image_height * 4);
-//   memset(g_draw_buffer, 0, g_image_width * g_image_height * 4);
-//   byte* g_draw_buffer_ptr = g_draw_buffer;
-//   for (uint32_t i = 0; i < g_image_width * g_image_height * 4; i += 4) {
-//     *(g_draw_buffer_ptr + 3) = 255;
-//     g_draw_buffer_ptr += 4;
-//   }
-//   g_draw_buffer_ptr = g_draw_buffer;
-
-//   g_recv_data_buffer = (byte*)malloc(g_image_width * g_image_height * 4);
-//   memset(g_recv_data_buffer, 0, g_image_width * g_image_height * 4);
-//   g_recv_data_ptr = g_recv_data_buffer;
-
-//   draw_ptr = &g_draw_buffer;
-//   recv_ptr = &g_recv_data_buffer;
-
-//   g_frame_count = 0;
-//   Chrono c;
-//   while (!glfwWindowShouldClose(g_window)) {
-//     c.start();
-//     glClear(GL_COLOR_BUFFER_BIT);
-//     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 
-//       g_image_width, g_image_height, GL_RGBA, GL_UNSIGNED_BYTE, *draw_ptr);
-
-//     glDrawArrays(GL_TRIANGLES, 0, 6);
-
-//     c.stop();
-//     //printf("Frame time: %.2f ms\n", c.timeAsMilliseconds());
-
-
-//     // Network stuff
-//     uint32_t bytes_read = 0;
-//     g_bytes_read = 0;
-//     while (g_bytes_read < g_image_width * g_image_height * 3) {
-//       bytes_read = g_socket.receiveData((*recv_ptr) + g_bytes_read, (g_image_width * g_image_height * 3) - g_bytes_read);
-//       g_bytes_read += bytes_read;
-//     }
-
-//     AddAlphaChannelData(recv_ptr, g_image_width * g_image_height * 3, g_image_width * g_image_height * 4);
-//     printf("\n%u %u %u %u in frame: %u\n", *((*recv_ptr) + 20000), *((*recv_ptr) + 20001), 
-//       *((*recv_ptr) + 20002), *((*recv_ptr) + 20003), g_frame_count.load());
-//     printf("\n%u %u %u %u in frame: %u\n", *((*draw_ptr) + 20000), *((*draw_ptr) + 20001), 
-//       *((*draw_ptr) + 20002), *((*draw_ptr) + 20003), g_frame_count.load());
-
-//     // Swap buffers
-//     if (recv_ptr == &g_recv_data_buffer) {
-//       printf("Once upon a frame...\n");
-//       recv_ptr = &g_draw_buffer;
-//       draw_ptr = &g_recv_data_buffer;
-//     }
-//     else {
-//       recv_ptr = &g_recv_data_buffer;
-//       draw_ptr = &g_draw_buffer;
-//     }
-
-//     ++g_frame_count;
-
-//     glfwSwapBuffers(g_window);
-//     glfwPollEvents();
-//   }
-
-//   if (g_draw_buffer) {
-//     free(g_draw_buffer);
-//   }
-//   if (g_recv_data_buffer) {
-//     free(g_recv_data_buffer);
-//   }
-
-//   glfwDestroyWindow(g_window);
-//   glfwTerminate();
-
-//   return 0;
-// }
-
 int main() {
   signal(SIGINT, InterruptSignalHandler);
 
@@ -591,7 +509,8 @@ int main() {
   InitializeGraphics();
   InitializeOpenGLStuff();
 
-  g_draw_buffer = (byte*)malloc(g_image_width * g_image_height * 4);
+  //free(g_draw_buffer);
+  //g_draw_buffer = (byte*)malloc(g_image_width * g_image_height * 4);
   memset(g_draw_buffer, 0, g_image_width * g_image_height * 4);
   byte* ptr = g_draw_buffer;
   for (uint32_t i = 0; i < g_image_width * g_image_height * 4; i += 4) {

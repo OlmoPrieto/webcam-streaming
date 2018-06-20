@@ -50,9 +50,15 @@ bool g_program_should_finish = false;
 std::atomic<bool> g_can_read_data_buffer;
 std::atomic<bool> g_can_send_data;
 std::atomic<bool> g_can_sync_processing;
+std::atomic<bool> g_can_process_data;
 std::atomic<bool> g_can_sync_network;
 std::atomic<bool> g_can_start_processing;
 std::atomic<bool> g_can_start_network;
+
+byte** g_read_ptr      = nullptr;
+byte** g_read_copy_ptr = nullptr;
+byte** g_process_ptr   = nullptr;
+byte** g_send_ptr      = nullptr;
 
 Chrono g_chrono;
 float elapsed_time = 0.0f;
@@ -63,42 +69,6 @@ NetworkState g_network_state = NetworkState::NoPeerConnected;
 
 void InterruptSignalHandler(int32_t param) {
   g_program_should_finish = true;
-}
-
-void ProcessImage(byte* src_image, unsigned int src_size, 
-  byte* dst_image, unsigned int dst_size, byte* out_data, unsigned int offset) {
-  assert(src_size == dst_size && "src image size differs from dst image size");
-  assert(offset < src_size && "offset out of bounds");
-
-  Chrono c;
-  c.start();
-
-  unsigned int count = 0;
-  byte* src_ptr = src_image;
-  byte* dst_ptr = dst_image;
-  for (unsigned int i = offset; i < src_size; ++i) {
-    if (*src_ptr != *dst_ptr) {
-      ++count;
-    }
-  }
-  c.stop();
-
-  //printf("Pixels that differ: %u\n", count);
-  //printf("Time to process image: %.2fms\n", c.timeAsMilliseconds());
-}
-
-void SendData(TCPSocket* socket, byte* buffer, uint32_t buffer_size) {
-  Chrono c;
-  c.start();
-
-  bool result = false;
-  while (!result) {
-    result = socket->sendData(buffer, buffer_size);
-  }
-
-  c.stop();
-
-  printf("Time to send image: %.2fms\n", c.timeAsMilliseconds());
 }
 
 #ifdef __PLATFORM_LINUX__
@@ -258,39 +228,71 @@ void GrabCameraFrame(byte* target_buffer) {
 }
 #endif
 
+void ProcessImage(byte* src_image, unsigned int src_size, 
+  byte* dst_image, unsigned int dst_size, byte* out_data, unsigned int offset) {
+  assert(src_size == dst_size && "src image size differs from dst image size");
+  assert(offset < src_size && "offset out of bounds");
 
-void ProcessingTask(byte* read_copy_ptr, byte* process_ptr) {
+  Chrono c;
+  c.start();
+
+  unsigned int count = 0;
+  byte* src_ptr = src_image;
+  byte* dst_ptr = dst_image;
+  for (unsigned int i = offset; i < src_size; ++i) {
+    if (*src_ptr != *dst_ptr) {
+      ++count;
+    }
+  }
+  c.stop();
+
+  //printf("Pixels that differ: %u\n", count);
+  //printf("Time to process image: %.2fms\n", c.timeAsMilliseconds());
+}
+
+void ProcessingTask() {
+  byte r = 0;
+  byte g = 64;
+  byte b = 128;
+
   while (!g_program_should_finish) {
-    if (g_can_start_processing == true) {
-      g_can_start_processing = false;
+    if (g_can_process_data == true) {
 
       switch (g_processing_state) {
         case ProcessingState::NotProcessing: {
-          if (g_can_read_data_buffer == true) {
-            g_processing_state = ProcessingState::Processing;
-          }
+          g_processing_state = ProcessingState::Processing;
 
           break;
         }
         case ProcessingState::Processing: {
-          ProcessImage(read_copy_ptr, g_format.fmt.pix.sizeimage, 
-              process_ptr, g_format.fmt.pix.sizeimage, nullptr, 0);
+          byte* ptr = *g_read_ptr;
+          for (uint32_t i = 0; i < g_format.fmt.pix.sizeimage; i += 3) {
+            *(ptr + 0) = r;
+            *(ptr + 1) = g;
+            *(ptr + 2) = b;
 
-          g_can_read_data_buffer = false;
-          //g_can_send_data = true; // NETWORK stuff
+            ptr += 3;
+          }
+          r++; g++; b++;
+          r %= 255; g %= 255; b %= 255;
+
+          ProcessImage(*g_read_copy_ptr, g_format.fmt.pix.sizeimage, 
+              *g_process_ptr, g_format.fmt.pix.sizeimage, nullptr, 0);
+
           g_processing_state = ProcessingState::NotProcessing;
 
           break;
         }
       }
 
+      g_can_process_data = false;
       g_can_sync_processing = true;
     }
   }
 }
 
 
-void NetworkTask(byte* send_ptr) {
+void NetworkTask() {
   TCPListener listener(Socket::Type::NonBlock, 128);
   listener.bind(14194);
   listener.listen();
@@ -345,58 +347,43 @@ void NetworkTask(byte* send_ptr) {
         }
 
         case NetworkState::Sending: {
-          byte* ptr = send_ptr;
-          for (uint32_t i = 0; i < g_format.fmt.pix.sizeimage; i += 3) {
-            *(ptr + 0) = r;
-            *(ptr + 1) = g;
-            *(ptr + 2) = b;
-
-            ptr += 3;
-          }
-          r++; g++; b++;
-          r %= 255; g %= 255; b %= 255;
+          // TODO: do this by combining rgb into a uint32_t and memsetting it
+          // byte* ptr = *g_send_ptr;
           // for (uint32_t i = 0; i < g_format.fmt.pix.sizeimage; i += 3) {
-          //   *(ptr + 0) = 0;
-          //   *(ptr + 1) = 0;
-          //   *(ptr + 2) = 255;
+          //   *(ptr + 0) = r;
+          //   *(ptr + 1) = g;
+          //   *(ptr + 2) = b;
 
           //   ptr += 3;
           // }
+          // r++; g++; b++;
+          // r %= 255; g %= 255; b %= 255;
 
           uint32_t bytes_sent = 0;
           g_bytes_sent = 0;
           if (g_can_send_data == true) {
-            g_can_send_data = false;
             g_network_state = NetworkState::PeerConnected;
 
             while (g_bytes_sent < g_format.fmt.pix.sizeimage) {
-              bytes_sent = socket->sendData(send_ptr + g_bytes_sent, g_format.fmt.pix.sizeimage - g_bytes_sent);
-              
-              if (bytes_sent == 0) {
-                g_can_send_data = true;
-                g_network_state = NetworkState::Sending;
-
-                printf("Sent zero bytes, remaining: %u\n", g_format.fmt.pix.sizeimage - g_bytes_sent);
-
-                //break;
-              }
+              bytes_sent = socket->sendData((*g_send_ptr) + g_bytes_sent, g_format.fmt.pix.sizeimage - g_bytes_sent);
 
               g_bytes_sent += bytes_sent;
+
+              if (g_program_should_finish == true) {
+                break;
+              }
             }
 
-            if (g_bytes_sent == g_format.fmt.pix.sizeimage) {
-              g_bytes_sent = 0;
-            }
-            
             printf("Sent %u bytes\n", g_bytes_sent);
+
+            // The order is important
+            g_can_send_data = false;
+            g_can_sync_network = true;
           }
 
           break;
         }
       } // switch
-
-      //g_bytes_sent = 0;
-      g_can_sync_network = true;
     } // g_can_start_network == true
   }
 }
@@ -433,17 +420,6 @@ int __main() {
 
     printf("\n");
   }
-
-  // uint32_t g_data_read = 0;
-  // uint32_t data_read = 0;
-  // while (g_data_read < 1000000) {
-  //   data_read = socket->receiveData(buffer + g_data_read, 1000000);
-  //   g_data_read += data_read;
-  // }
-
-  // if (buffer[1] == 15) {
-  //   printf("YEAH!\n");
-  // }
 
   Chrono c;
   c.start();
@@ -504,6 +480,8 @@ int ___main(int argc, char** argv) {
 
   g_can_sync_network = false;
   g_can_sync_processing = false;
+  g_can_process_data = true;
+  g_can_send_data = true;
   
   g_format.fmt.pix.sizeimage = 640 * 480 * 3;
 
@@ -521,18 +499,23 @@ int ___main(int argc, char** argv) {
   for (uint32_t i = 0; i < 4; ++i) {
     memset(buffers[i], 0, g_format.fmt.pix.sizeimage);
   }
-  read_ptr      = buffers[0];
-  read_copy_ptr = buffers[1];
-  process_ptr   = buffers[2];
-  send_ptr      = buffers[3];
+  g_read_ptr      = &buffers[0];
+  g_read_copy_ptr = &buffers[1];
+  g_process_ptr   = &buffers[2];
+  g_send_ptr      = &buffers[3];
 
-  std::thread network_thread(NetworkTask, send_ptr);
-  std::thread process_image_thread(ProcessingTask, read_copy_ptr, process_ptr);
+  std::thread network_thread(NetworkTask);
+  std::thread process_image_thread(ProcessingTask);
 
   const char* device = (argc > 1) ? argv[1] : "/dev/video0";
   //InitializeVideoDevice(device);
 
-  //EnableVideoStreaming();
+  #if defined(__PLATFORM_MACOSX__) || defined(__PLATFORM_WINDOWS__)
+  // No video streaming
+  #else
+  EnableVideoStreaming();
+  #endif
+
 
   /* MAIN LOOP */
   Chrono c;
@@ -540,7 +523,7 @@ int ___main(int argc, char** argv) {
   while (g_program_should_finish == false) {
     c.start();
 
-    memcpy(read_copy_ptr, read_ptr, g_format.fmt.pix.sizeimage);
+    memcpy(*g_read_copy_ptr, *g_read_ptr, g_format.fmt.pix.sizeimage);
     g_can_start_processing = true;
     g_can_read_data_buffer = true;
     g_can_start_network = true;
@@ -549,23 +532,23 @@ int ___main(int argc, char** argv) {
 
     // sync point
     if (g_can_sync_processing == true && g_can_sync_network == true) {
+      printf("Swapping buffers...\n");
+
+      g_read_ptr      = &buffers[(index) % 3];
+      g_read_copy_ptr = &buffers[(index + 1) % 3];
+      g_process_ptr   = &buffers[(index + 2) % 3];
+      g_send_ptr      = &buffers[(index + 3) % 3];
+      ++index;
+      if (index > 1000000) {
+        // to avoid overflows in long executions
+        index = 0;
+      }
+
       g_can_sync_processing = false;
       g_can_sync_network = false;
-
-      //printf("Swapping buffers...\n");
-
-      // read_ptr      = buffers[(index) % 3];
-      // read_copy_ptr = buffers[(index + 1) % 3];
-      // process_ptr   = buffers[(index + 2) % 3];
-      // send_ptr      = buffers[(index + 3) % 3];
-      // ++index;
-      // if (index > 1000000) {
-      //   // to avoid overflows in long executions
-      //   index = 0;
-      // }
+      g_can_process_data = true;
+      g_can_send_data = true;
     }
-
-
 
     c.stop();
     //printf("Frame time: %.2fms\n", c.timeAsMilliseconds());
