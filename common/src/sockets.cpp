@@ -84,17 +84,15 @@ TCPSocket::~TCPSocket() {
   }
 }
 
-// bool TCPSocket::bind(uint32_t port) {
-//   return true;
-//   //return ::bind(socket_descriptor, (struct sockaddr*)&address, sizeof(address)) > -1;
-//   // errno = 0;
-//   // ::bind(socket_descriptor, (struct sockaddr*)&address, sizeof(address));
-//   // if (errno != 0) {
-//   //   printf("Bind: %s\n", strerror(errno));
-//   // }
+bool Socket::bind(uint32_t port) {
+  errno = 0;
+  ::bind(socket_descriptor, (struct sockaddr*)&address, sizeof(address));
+  if (errno != 0) {
+    printf("Bind: %s\n", strerror(errno));
+  }
 
-//   // return true;
-// }
+  return true;
+}
 
 bool TCPSocket::connect(const char* ip, uint32_t port) {
   address.sin_addr.s_addr = inet_addr(ip);
@@ -177,13 +175,9 @@ bool TCPSocket::connect(const char* ip, uint32_t port) {
   return connection_status == ConnectionStatus::Connected;
 }
 
-uint32_t TCPSocket::sendData(byte* buffer, uint32_t buffer_size) {
+uint32_t Socket::sendData(byte* buffer, uint32_t buffer_size) {
   uint32_t bytes_sent = 0;
   int32_t status = 0;
-
-  if (buffer_size == 0) {
-    printf("ME CAGO EN LA WEA AGAIN\n");
-  }
 
   if (sending_status == SendingStatus::CanSend) {
     errno = 0;
@@ -274,7 +268,7 @@ uint32_t TCPSocket::sendData(byte* buffer, uint32_t buffer_size) {
   return bytes_sent;
 }
 
-uint32_t TCPSocket::receiveData(byte* buffer, uint32_t max_size_to_read) {
+uint32_t Socket::receiveData(byte* buffer, uint32_t max_size_to_read) {
   uint32_t bytes_read = 0;
   int32_t status = 0;
 
@@ -290,7 +284,7 @@ uint32_t TCPSocket::receiveData(byte* buffer, uint32_t max_size_to_read) {
 
             break;
           }
-          case ECONNRESET: {
+          case ECONNREFUSED: {
             // close();
             // construct(type);
             connection_status = ConnectionStatus::Disconnected;
@@ -368,7 +362,7 @@ uint32_t TCPSocket::receiveData(byte* buffer, uint32_t max_size_to_read) {
   return bytes_read;
 }
 
-bool TCPSocket::close() {
+bool Socket::close() {
   connection_status = ConnectionStatus::Disconnected;
 
   int32_t error_state = 0;
@@ -396,7 +390,7 @@ bool TCPSocket::close() {
   return result;
 }
 
-bool TCPSocket::isConnected() const {
+bool Socket::isConnected() const {
   return connection_status == ConnectionStatus::Connected;
 }
   
@@ -429,24 +423,6 @@ bool TCPSocket::isConnected() const {
   uint32_t max_recv_buffer_size = 0;
   setsockopt(socket_descriptor, SOL_SOCKET, SO_REUSEADDR, (int32_t*)&true_int_value, sizeof(int32_t));  // CAREFUL: this violates TCP/IP protocol making it unlikely but possible for the next program that binds on that port to pick up packets intended for the original program
   
-  getsockopt(socket_descriptor, SOL_SOCKET, SO_RCVBUF, (uint32_t*)&max_recv_buffer_size, &sizeofunsignedint);
-  printf("Receive buffer size: %u\n", max_recv_buffer_size);
-  //max_recv_buffer_size *= 4;
-  setsockopt(socket_descriptor, SOL_SOCKET, SO_RCVBUF, (uint32_t*)&max_recv_buffer_size, sizeofunsignedint);
-  getsockopt(socket_descriptor, SOL_SOCKET, SO_RCVBUF, (uint32_t*)&max_recv_buffer_size, &sizeofunsignedint);
-  printf("Receive buffer size: %u\n", max_recv_buffer_size);
-
-
-  uint32_t max_send_buffer_size = 0;
-  getsockopt(socket_descriptor, SOL_SOCKET, SO_SNDBUF, (uint32_t*)&max_send_buffer_size, &sizeofunsignedint);
-  printf("Send buffer size: %u\n", max_send_buffer_size);
-  //max_send_buffer_size *= 8;
-  setsockopt(socket_descriptor, SOL_SOCKET, SO_SNDBUF, (uint32_t*)&max_send_buffer_size, sizeofunsignedint);
-  getsockopt(socket_descriptor, SOL_SOCKET, SO_SNDBUF, (uint32_t*)&max_send_buffer_size, &sizeofunsignedint);
-  printf("Send buffer size: %u\n", max_send_buffer_size);
-  
-  //setsockopt(socket_descriptor, IPPROTO_TCP, TCP_NODELAY, (int32_t*)&true_int_value, sizeof(int32_t));
-
   // TODO: give the option to SO_NOSIGPIPE to be flagable
   //setsockopt(socket_descriptor, SOL_SOCKET, SO_NOSIGPIPE, (int32_t*)&true_int_value, sizeof(int32_t));
 
@@ -472,13 +448,6 @@ TCPListener::~TCPListener() {
   if (!closed) {
     close();
   }
-}
-
-bool TCPListener::bind(uint32_t port) {
-  address.sin_addr.s_addr = htons(INADDR_ANY);
-  address.sin_port = htons(port);
-
-  return ::bind(socket_descriptor, (struct sockaddr*)&address, sizeof(address)) > -1;
 }
 
 bool TCPListener::listen() {
