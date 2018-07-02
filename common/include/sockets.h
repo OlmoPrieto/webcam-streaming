@@ -20,16 +20,6 @@ public:
     NonBlock,
     Block,
   };
-};
-
-class TCPSocket : public Socket {
-public:
-  enum class ConnectionStatus {
-    Disconnected,
-    Connecting,
-    Connected,
-    Ready
-  };
 
   enum class ReceivingStatus {
     CanReceive,
@@ -39,6 +29,39 @@ public:
   enum class SendingStatus {
     CanSend,
     Sending
+  };
+
+  struct Peer;
+
+  Socket();
+  virtual ~Socket();
+
+  bool bind(uint32_t port);
+  bool close();
+  bool isConnected() const;
+  uint32_t sendData(byte* buffer, uint32_t buffer_size);
+  uint32_t receiveData(byte* buffer, uint32_t max_size_to_read);
+
+protected:
+  virtual void construct(Socket::Type type) = 0;
+
+  int32_t getDescriptor() const;
+
+  struct sockaddr_in address;
+  ReceivingStatus receiving_status;
+  SendingStatus sending_status;
+  Type type;
+  int32_t socket_descriptor;
+  bool closed;
+};
+
+class TCPSocket : public Socket {
+public:
+  enum class ConnectionStatus {
+    Disconnected,
+    Connecting,
+    Connected,
+    Ready
   };
 
   TCPSocket(Type type);
@@ -98,6 +121,12 @@ private:
   uint32_t queue_size;
   int32_t socket_descriptor;
   bool closed;
+};
+
+class UDPSocket : public Socket {
+public:
+  uint32_t sendData(byte* buffer, uint32_t buffer_size, const Socket::Peer& peer);
+  uint32_t receiveData(byte* buffer, uint32_t max_size_to_read, const Socket::Peer& peer);
 };
 
 #endif // __SOCKETS_H__

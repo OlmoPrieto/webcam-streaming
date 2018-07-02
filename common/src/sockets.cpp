@@ -4,6 +4,8 @@
 #include <cerrno>
 #include <cstdio>
 
+#include <string>
+
 #include <netinet/tcp.h>
 
 
@@ -18,6 +20,53 @@
   #undef error_printf
   #define error_printf(fmt, ...) (0)
 #endif
+
+// [Socket]
+// [Socket::Peer]
+struct Socket::Peer {
+private:
+  struct sockaddr_in address;
+
+public:
+  std::string ip_address;
+  uint32_t port;
+
+  Peer() {
+    ip_address.reserve(16); // counting "255.255.255.255" as chars
+    port = 0;
+    memset(&address, 0, sizeof(address));
+  }
+  Peer(const std::string& ip, uint32_t port_) : ip_address(ip), port(port_) {
+    memset(&address, 0, sizeof(address));
+  }
+  operator struct sockaddr* () {
+    address.sin_family = AF_INET;
+    address.sin_addr.s_addr = inet_addr(ip_address.c_str());
+    address.sin_port = htons(port);
+    
+    return (sockaddr*)&address;
+  }
+
+  static Peer LocalHost(uint32_t port = 14194) {
+    Peer p("127.0.0.1", port);
+    return p;
+  }
+
+  static Peer Any(uint32_t port = 14194) {
+    Peer p("0.0.0.0", port);
+    return p;
+  }
+};
+// [\Socket::Peer]
+
+Socket::Socket() {
+
+}
+
+Socket::~Socket() {
+
+}
+// [\Socket]
 
 // [TCPSocket]
 TCPSocket::TCPSocket(Type _type) {
