@@ -73,6 +73,7 @@ public:
   ~TCPSocket();
 
   bool connect(const char* ip, uint32_t port);
+  bool connect(const Peer& peer);
   bool isConnected() const;
 
 private:
@@ -113,10 +114,18 @@ private:
   uint32_t queue_size;
 };
 
-// class UDPSocket : public Socket {
-// public:
-//   uint32_t sendData(byte* buffer, uint32_t buffer_size, const Socket::Peer& peer);
-//   uint32_t receiveData(byte* buffer, uint32_t max_size_to_read, const Socket::Peer& peer);
-// };
+class UDPSocket : public Socket {
+public:
+  UDPSocket(Socket::Type type);
+  ~UDPSocket();
+
+  uint32_t sendData(byte* buffer, uint32_t buffer_size, const Socket::Peer& peer);
+  uint32_t receiveData(byte* buffer, uint32_t max_size_to_read, const Socket::Peer& peer);
+
+private:
+  UDPSocket();
+  virtual void construct(Socket::Type type) override;
+  virtual void handleError(ErrorFrom from, int32_t error) override;
+};
 
 #endif // __SOCKETS_H__

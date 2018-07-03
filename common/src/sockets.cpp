@@ -30,19 +30,29 @@ private:
 public:
   std::string ip_address;
   uint32_t port;
+  bool ready;
 
   Peer() {
     ip_address.reserve(16); // counting "255.255.255.255" as chars
     port = 0;
+    ready = false;
     memset(&address, 0, sizeof(address));
+    address.sin_family = AF_INET;
   }
   Peer(const std::string& ip, uint32_t port_) : ip_address(ip), port(port_) {
     memset(&address, 0, sizeof(address));
+    address.sin_family = AF_INET;
+    address.sin_addr.s_addr = inet_addr(ip_address.c_str());
+    address.sin_port = htons(port);
+
+    ready = true;
   }
   operator struct sockaddr* () {
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = inet_addr(ip_address.c_str());
     address.sin_port = htons(port);
+
+    ready = true;
     
     return (sockaddr*)&address;
   }
@@ -407,6 +417,10 @@ bool TCPSocket::connect(const char* ip, uint32_t port) {
   return connection_status == ConnectionStatus::Connected;
 }
 
+bool TCPSocket::connect(const Peer& peer) {
+  TCPSocket::connect(peer.ip_address.c_str(), peer.port);
+}
+
 bool TCPSocket::isConnected() const {
   return connection_status == TCPSocket::ConnectionStatus::Connected;
 }
@@ -569,7 +583,9 @@ bool TCPListener::close() {
   bool success = true;
 
   if (accepted_socket) {
-    success = shutdown(accepted_socket->getDescriptor(), SHUT_RDWR) > -1;
+    //success = shutdown(accepted_socket->getDescriptor(), SHUT_RDWR) > -1;
+    success = accepted_socket->close();
+
     delete accepted_socket;
   }
   
@@ -634,3 +650,46 @@ bool TCPListener::close() {
   printf("TCPListener::handleError() not handled\n");
 }
 // [\TCPListener]
+
+
+// [UDPSocket]
+UDPSocket::UDPSocket(Socket::Type type) {
+
+}
+
+UDPSocket::~UDPSocket() {
+  if (!closed) {
+    close();
+  }
+}
+
+uint32_t UDPSocket::sendData(byte* buffer, uint32_t buffer_size, const Socket::Peer& peer) {
+  if (peer.ready == true) {
+
+  }
+  else {
+    error_printf("UDPSocket::sendData(): peer not ready\n");
+  }
+}
+
+uint32_t UDPSocket::receiveData(byte* buffer, uint32_t max_size_to_read, const Socket::Peer& peer) {
+  if (peer.ready == true) {
+
+  }
+  else {
+    error_printf("UDPSocket::receiveData(): peer not ready\n");
+  }
+}
+
+UDPSocket::UDPSocket() {
+
+}
+
+void UDPSocket::construct(Socket::Type type) {
+
+}
+
+void UDPSocket::handleError(ErrorFrom from, int32_t error) {
+
+}
+// [\UDPSocket]
