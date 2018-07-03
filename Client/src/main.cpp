@@ -459,7 +459,7 @@ void NetworkTask() {
   g_socket.close();
 }
 
-int __main() {
+int main() {
   TCPSocket socket(Socket::Type::NonBlock);
   while (!socket.connect("127.0.0.1", 14194)) {
 
@@ -501,7 +501,7 @@ int __main() {
   return 0;
 }
 
-int main() {
+int __main() {
   signal(SIGINT, InterruptSignalHandler);
 
   std::thread network_thread(NetworkTask);

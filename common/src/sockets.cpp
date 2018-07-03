@@ -66,113 +66,45 @@ Socket::Socket() {
 Socket::~Socket() {
 
 }
-// [\Socket]
-
-// [TCPSocket]
-TCPSocket::TCPSocket(Type _type) {
-  memset(&address, 0, sizeof(address));
-  address.sin_family = AF_INET;
-                            // AF_INET
-  socket_descriptor = socket(address.sin_family, SOCK_STREAM, 0);
-
-  construct(_type);
-}
-
-TCPSocket::~TCPSocket() {
-  if (!closed) {
-    close();
-  }
-}
 
 bool Socket::bind(uint32_t port) {
   errno = 0;
+  address.sin_port = htons(port);
   ::bind(socket_descriptor, (struct sockaddr*)&address, sizeof(address));
   if (errno != 0) {
-    printf("Bind: %s\n", strerror(errno));
+    error_printf("Bind: %s\n", strerror(errno));
   }
 
   return true;
 }
 
-bool TCPSocket::connect(const char* ip, uint32_t port) {
-  address.sin_addr.s_addr = inet_addr(ip);
-  address.sin_port = htons(port);
-  assert(address.sin_addr.s_addr != 0 && address.sin_port != 0);
+bool Socket::close() {
+  //connection_status = TCPSocket::ConnectionStatus::Disconnected;
+  handleError(ErrorFrom::Close, ECONNRESET);  // Hack to make TCP socket to disconnect
 
-  int32_t status = 0;
-  if (connection_status == ConnectionStatus::Disconnected) {
-    errno = 0;
-    status = ::connect(socket_descriptor, (struct sockaddr*)&address, sizeof(address));
-    if (status == -1) {
-      if (errno != 0) {
-        switch (errno) {
-          case EINPROGRESS:
-          case EALREADY: {
-            error_printf("Cannot stablish connection now; will keep trying\n");
-            connection_status = ConnectionStatus::Connecting;
-
-            break;
-          }
-          case EINVAL:
-          case ECONNREFUSED: {
-            close();
-            construct(type);
-
-            break;
-          }
-          default: {
-            error_printf("Connect error not supported: %s\n", strerror(errno));
-          }
-        }
-      }
-    }
-    else if (status == 0) {
-      error_printf("CONNECTED\n");
-      connection_status = ConnectionStatus::Connected;
-    }
+  int32_t error_state = 0;
+  socklen_t sizeofint = sizeof(int32_t);
+  errno = 0;
+  int32_t status = getsockopt(socket_descriptor, SOL_SOCKET, SO_ERROR, &error_state, &sizeofint);
+  if (status == -1) {
+    error_printf("getsockopt: %s\n", strerror(errno));
   }
-  else if (connection_status == ConnectionStatus::Connecting) {
-    fd_set sock_des;
-    memset(&sock_des, 0, sizeof(sock_des));
-    FD_ZERO(&sock_des);
-    FD_SET(socket_descriptor, &sock_des);
-
-    struct timeval timeout;
-    memset(&timeout, 0, sizeof(timeout));
-    //timeout.tv_usec = 1;
-    errno = 0;
-    status = select(socket_descriptor + 1, nullptr, &sock_des, nullptr, &timeout);  // CAREFUL: need to ask for fds than can be WRITTEN, not READABLE
-    if (status >= 0) {
-      if (FD_ISSET(socket_descriptor, &sock_des) > 0) {
-        int32_t error_state = 0;
-        socklen_t sizeofint = sizeof(int32_t);
-        int32_t result = getsockopt(socket_descriptor, SOL_SOCKET, SO_ERROR, &error_state, &sizeofint);
-        if (result == 0) {
-          if (error_state != 0) {
-            error_printf("Query error value: %s\n", strerror(error_state));
-            if (error_state == ECONNREFUSED) {
-              close();
-              construct(type);
-            }
-          }
-          else {
-            error_printf("No error, connected\n");
-            connection_status = ConnectionStatus::Connected;
-          }
-        }
-        else if (errno != 0) {
-          error_printf("getsockopt: %s\n", strerror(errno));
-        }
-      }
-    }
-  }
-  else {
-    error_printf("Socket already connected, resetting...\n");
-    close();
-    construct(type);
+  // at this point, any error in socket_descriptor should have been cleared
+  errno = 0;
+  shutdown(socket_descriptor, SHUT_RDWR);
+  if (errno != 0) {
+    error_printf("shutdown: %s\n", strerror(errno));
   }
 
-  return connection_status == ConnectionStatus::Connected;
+  errno = 0;
+  bool result = ::close(socket_descriptor) > -1;
+  if (errno != 0) {
+    error_printf("Close: %s\n", strerror(errno));
+  }
+
+  closed = result;
+
+  return result;
 }
 
 uint32_t Socket::sendData(byte* buffer, uint32_t buffer_size) {
@@ -192,14 +124,13 @@ uint32_t Socket::sendData(byte* buffer, uint32_t buffer_size) {
             break;
           }
           case EPIPE: {
-            error_printf("The connection was closed\n");
+            error_printf("The connection was closed locally\n");
 
             break;
           }
           case ECONNRESET: {
-            // close();
-            // construct(type);  // This sets connection_status to ConnectionStatus::Disconnected
-            connection_status = ConnectionStatus::Disconnected;
+            //connection_status = ConnectionStatus::Disconnected;
+            handleError(ErrorFrom::SendData, ECONNRESET); // should send errno instead
 
             break;
           }
@@ -285,9 +216,8 @@ uint32_t Socket::receiveData(byte* buffer, uint32_t max_size_to_read) {
             break;
           }
           case ECONNREFUSED: {
-            // close();
-            // construct(type);
-            connection_status = ConnectionStatus::Disconnected;
+            //connection_status = TCPSocket::ConnectionStatus::Disconnected;
+            handleError(ErrorFrom::ReceiveData, ECONNRESET);  // should send errno instead
 
             break;
           }
@@ -331,13 +261,25 @@ uint32_t Socket::receiveData(byte* buffer, uint32_t max_size_to_read) {
             if (errno != 0) {
               //error_printf("Receive data: %s\n", strerror(errno));
               if (errno == EINVAL) {
-                error_printf("Receive data: EINVAL\n");
+                
               }
               else if (errno == EWOULDBLOCK) {
-                error_printf("Receive data: EWOULDBLOCK\n");
+                
               }
               else {
-                error_printf("WEA\n");
+                
+              }
+
+              switch (errno) {
+                case EINVAL: {
+                  error_printf("Receive data: %s\n", strerror(errno));
+                }
+                case EWOULDBLOCK: {
+                  error_printf("Receive data: %s\n", strerror(errno));
+                }
+                default: {
+                  error_printf("Receive data error not handled: %s\n", strerror(errno));
+                }
               }
             }
             if (status >= 0) {
@@ -362,36 +304,111 @@ uint32_t Socket::receiveData(byte* buffer, uint32_t max_size_to_read) {
   return bytes_read;
 }
 
-bool Socket::close() {
-  connection_status = ConnectionStatus::Disconnected;
+/*private*/int32_t Socket::getDescriptor() const {
+  return socket_descriptor;
+}
+// [\Socket]
 
-  int32_t error_state = 0;
-  socklen_t sizeofint = sizeof(int32_t);
-  errno = 0;
-  int32_t status = getsockopt(socket_descriptor, SOL_SOCKET, SO_ERROR, &error_state, &sizeofint);
-  if (status == -1) {
-    error_printf("getsockopt: %s\n", strerror(errno));
-  }
-  // at this point, any error in socket_descriptor should have been cleared
-  errno = 0;
-  shutdown(socket_descriptor, SHUT_RDWR);
-  if (errno != 0) {
-    error_printf("shutdown: %s\n", strerror(errno));
-  }
 
-  errno = 0;
-  bool result = ::close(socket_descriptor) > -1;
-  if (errno != 0) {
-    error_printf("Close: %s\n", strerror(errno));
-  }
+// [TCPSocket]
+TCPSocket::TCPSocket(Type _type) {
+  memset(&address, 0, sizeof(address));
+  address.sin_family = AF_INET;
+                            // AF_INET
+  socket_descriptor = socket(address.sin_family, SOCK_STREAM, 0);
 
-  closed = result;
-
-  return result;
+  construct(_type);
 }
 
-bool Socket::isConnected() const {
+TCPSocket::~TCPSocket() {
+  if (!closed) {
+    close();
+  }
+}
+
+bool TCPSocket::connect(const char* ip, uint32_t port) {
+  address.sin_addr.s_addr = inet_addr(ip);
+  address.sin_port = htons(port);
+  assert(address.sin_addr.s_addr != 0 && address.sin_port != 0);
+
+  int32_t status = 0;
+  if (connection_status == ConnectionStatus::Disconnected) {
+    errno = 0;
+    status = ::connect(socket_descriptor, (struct sockaddr*)&address, sizeof(address));
+    if (status == -1) {
+      if (errno != 0) {
+        switch (errno) {
+          case EINPROGRESS:
+          case EALREADY: {
+            error_printf("Cannot stablish connection now; will keep trying\n");
+            connection_status = ConnectionStatus::Connecting;
+
+            break;
+          }
+          case EINVAL:
+          case ECONNREFUSED: {
+            close();
+            construct(type);
+
+            break;
+          }
+          default: {
+            error_printf("Connect error not supported: %s\n", strerror(errno));
+          }
+        }
+      }
+    }
+    else if (status == 0) {
+      error_printf("CONNECTED\n");
+      connection_status = ConnectionStatus::Connected;
+    }
+  }
+  else if (connection_status == ConnectionStatus::Connecting) {
+    fd_set sock_des;
+    memset(&sock_des, 0, sizeof(sock_des));
+    FD_ZERO(&sock_des);
+    FD_SET(socket_descriptor, &sock_des);
+
+    struct timeval timeout;
+    memset(&timeout, 0, sizeof(timeout));
+    //timeout.tv_usec = 1;
+    errno = 0;
+    status = select(socket_descriptor + 1, nullptr, &sock_des, nullptr, &timeout);  // CAREFUL: need to ask for fds than can be WRITTEN, not READABLE
+    if (status >= 0) {
+      if (FD_ISSET(socket_descriptor, &sock_des) > 0) {
+        int32_t error_state = 0;
+        socklen_t sizeofint = sizeof(int32_t);
+        int32_t result = getsockopt(socket_descriptor, SOL_SOCKET, SO_ERROR, &error_state, &sizeofint);
+        if (result == 0) {
+          if (error_state != 0) {
+            error_printf("Query error value: %s\n", strerror(error_state));
+            if (error_state == ECONNREFUSED) {
+              close();
+              construct(type);
+            }
+          }
+          else {
+            error_printf("No error, connected\n");
+            connection_status = ConnectionStatus::Connected;
+          }
+        }
+        else if (errno != 0) {
+          error_printf("getsockopt: %s\n", strerror(errno));
+        }
+      }
+    }
+  }
+  else {
+    error_printf("Socket already connected, resetting...\n");
+    close();
+    construct(type);
+  }
+
   return connection_status == ConnectionStatus::Connected;
+}
+
+bool TCPSocket::isConnected() const {
+  return connection_status == TCPSocket::ConnectionStatus::Connected;
 }
   
 /*private*/TCPSocket::TCPSocket(Type type, uint32_t descriptor) {
@@ -403,7 +420,7 @@ bool Socket::isConnected() const {
 /*private*/TCPSocket::TCPSocket() {
   memset(&address, 0, sizeof(address));
   address.sin_family = AF_INET;
-                            // AF_INET
+                                // AF_INET
   socket_descriptor = socket(address.sin_family, SOCK_STREAM, 0);
 
   construct(Socket::Type::NonBlock);
@@ -431,11 +448,25 @@ bool Socket::isConnected() const {
   }
 }
 
-/*private*/int32_t TCPSocket::getDescriptor() const {
-  return socket_descriptor;
+/*private*/void TCPSocket::handleError(ErrorFrom from, int32_t error) {
+  switch (error) {
+    case ECONNRESET: {
+      
+      switch (from) {
+        case ErrorFrom::SendData:
+        case ErrorFrom::ReceiveData:
+        case ErrorFrom::Close: {
+          connection_status = ConnectionStatus::Disconnected;
+
+          break;
+        }
+      }
+
+      break;
+    }
+  }
 }
 // [\TCPSocket]
-
 
 
 // [TCPListener]
@@ -583,6 +614,8 @@ bool TCPListener::close() {
 
   memset(&address, 0, sizeof(address));
   address.sin_family = AF_INET;
+  // TODO: maybe parametrize INADDR_ANY
+  address.sin_addr.s_addr = INADDR_ANY;
 
   // Should put this in an init() method
   socket_descriptor = socket(address.sin_family, SOCK_STREAM, 0);
@@ -595,5 +628,9 @@ bool TCPListener::close() {
   if (type == Type::NonBlock) {
     fcntl(socket_descriptor, F_SETFL, O_NONBLOCK);
   }
+}
+
+/*private*/void TCPListener::handleError(ErrorFrom from, int32_t error) {
+  printf("TCPListener::handleError() not handled\n");
 }
 // [\TCPListener]

@@ -394,7 +394,7 @@ void NetworkTask() {
   }
 }
 
-int __main() {
+int main() {
 	TCPListener listener(Socket::Type::NonBlock);
 	listener.bind(14194);
 	listener.listen();
@@ -404,6 +404,9 @@ int __main() {
 		socket = listener.accept();
 	}
 	printf("Accepted connection\n");
+
+  Chrono c;
+  c.start();
 
 	byte buffer[1000000];
 	memset(buffer, 0, 1000000);
@@ -426,9 +429,6 @@ int __main() {
 
     printf("\n");
   }
-
-  Chrono c;
-  c.start();
 
   c.stop();
   printf("Time: %.2f ms\n", c.timeAsMilliseconds());
@@ -481,7 +481,7 @@ int ___main() {
   return true;
 }
 
-int main(int argc, char** argv) {
+int __main(int argc, char** argv) {
   signal(SIGINT, InterruptSignalHandler);
 
   g_can_sync_network = false;

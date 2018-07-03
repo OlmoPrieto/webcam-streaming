@@ -17,17 +17,17 @@ typedef unsigned char byte;
 class Socket {
 public:
   enum class Type {
-    NonBlock,
+    NonBlock = 0,
     Block,
   };
 
   enum class ReceivingStatus {
-    CanReceive,
+    CanReceive = 0,
     Receiving
   };
   
   enum class SendingStatus {
-    CanSend,
+    CanSend = 0,
     Sending
   };
 
@@ -38,12 +38,18 @@ public:
 
   bool bind(uint32_t port);
   bool close();
-  bool isConnected() const;
   uint32_t sendData(byte* buffer, uint32_t buffer_size);
   uint32_t receiveData(byte* buffer, uint32_t max_size_to_read);
 
 protected:
+  enum class ErrorFrom {
+    SendData = 0,
+    ReceiveData,
+    Close
+  };
+
   virtual void construct(Socket::Type type) = 0;
+  virtual void handleError(ErrorFrom from, int32_t error) = 0;
   int32_t getDescriptor() const;
 
   struct sockaddr_in address;
@@ -67,6 +73,7 @@ public:
   ~TCPSocket();
 
   bool connect(const char* ip, uint32_t port);
+  bool isConnected() const;
 
 private:
   friend class TCPListener;
@@ -74,6 +81,7 @@ private:
   TCPSocket(Socket::Type type, uint32_t descriptor);
   TCPSocket();
   virtual void construct(Socket::Type type) override;
+  virtual void handleError(ErrorFrom from, int32_t error) override;
 
   ConnectionStatus connection_status;
 };
@@ -98,6 +106,7 @@ public:
 private:
   TCPListener();
   virtual void construct(Socket::Type type) override;
+  virtual void handleError(ErrorFrom from, int32_t error) override;
 
   ListeningStatus listening_status;
   TCPSocket* accepted_socket;
