@@ -459,7 +459,7 @@ void NetworkTask() {
   g_socket.close();
 }
 
-int main() {
+int ___main() {
   TCPSocket socket(Socket::Type::NonBlock);
   while (!socket.connect("127.0.0.1", 14194)) {
 
@@ -497,6 +497,26 @@ int main() {
   printf("Data received[1]: %u\n", buffer[1]);
   c.stop();
   printf("Time to receive data: %.2f ms\n", c.timeAsMilliseconds());
+
+  return 0;
+}
+
+int main() {
+  UDPSocket socket(Socket::Type::NonBlock);
+
+  byte buffer[1000];
+  memset(buffer, 0, 1000);
+
+  socket.bind(14194);
+
+  uint32_t bytes_read = 0;
+  while (bytes_read == 0) {
+    bytes_read = socket.receiveData(buffer, 1000, Socket::Peer::LocalHost());
+  }
+
+  printf("Received %u bytes\n", 
+    bytes_read);
+  printf("buffer[1]: %u\n", buffer[1]);
 
   return 0;
 }

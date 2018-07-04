@@ -15,7 +15,7 @@
 #endif
 
 #define error_printf(fmt, ...) (printf(fmt, ##__VA_ARGS__))
-#define IGNORE_ERROR_PRINTF 1
+#define IGNORE_ERROR_PRINTF 0
 #if IGNORE_ERROR_PRINTF == 1
   #undef error_printf
   #define error_printf(fmt, ...) (0)
@@ -23,50 +23,49 @@
 
 // [Socket]
 // [Socket::Peer]
-struct Socket::Peer {
-private:
-  struct sockaddr_in address;
+Socket::Peer::Peer() {
+  ip_address.reserve(16); // counting "255.255.255.255" as chars
+  port = 0;
+  ready = false;
+  memset(&address, 0, sizeof(address));
+  address.sin_family = AF_INET;
+}
 
-public:
-  std::string ip_address;
-  uint32_t port;
-  bool ready;
-
-  Peer() {
-    ip_address.reserve(16); // counting "255.255.255.255" as chars
-    port = 0;
-    ready = false;
-    memset(&address, 0, sizeof(address));
-    address.sin_family = AF_INET;
+Socket::Peer::Peer(const std::string& ip, uint32_t port_) : ip_address(ip), port(port_) {
+  memset(&address, 0, sizeof(address));
+  address.sin_family = AF_INET;
+  address.sin_addr.s_addr = inet_addr(ip_address.c_str());
+  if (ip_address == "0.0.0.0") {
+    address.sin_addr.s_addr = htonl(INADDR_ANY);
   }
-  Peer(const std::string& ip, uint32_t port_) : ip_address(ip), port(port_) {
-    memset(&address, 0, sizeof(address));
-    address.sin_family = AF_INET;
-    address.sin_addr.s_addr = inet_addr(ip_address.c_str());
-    address.sin_port = htons(port);
+  address.sin_port = htons(port);
 
-    ready = true;
-  }
-  operator struct sockaddr* () {
-    address.sin_family = AF_INET;
-    address.sin_addr.s_addr = inet_addr(ip_address.c_str());
-    address.sin_port = htons(port);
+  ready = true;
+}
 
-    ready = true;
-    
-    return (sockaddr*)&address;
-  }
+Socket::Peer::~Peer() {
 
-  static Peer LocalHost(uint32_t port = 14194) {
-    Peer p("127.0.0.1", port);
-    return p;
-  }
+}
 
-  static Peer Any(uint32_t port = 14194) {
-    Peer p("0.0.0.0", port);
-    return p;
-  }
-};
+Socket::Peer::operator struct sockaddr* () {
+  address.sin_family = AF_INET;
+  address.sin_addr.s_addr = inet_addr(ip_address.c_str());
+  address.sin_port = htons(port);
+
+  ready = true;
+  
+  return (sockaddr*)&address;
+}
+
+Socket::Peer Socket::Peer::LocalHost(uint32_t port) {
+  Peer p("127.0.0.1", port);
+  return p;
+}
+
+Socket::Peer Socket::Peer::Any(uint32_t port) {
+  Peer p("0.0.0.0", port);
+  return p;
+}
 // [\Socket::Peer]
 
 Socket::Socket() {
@@ -123,7 +122,10 @@ uint32_t Socket::sendData(byte* buffer, uint32_t buffer_size) {
 
   if (sending_status == SendingStatus::CanSend) {
     errno = 0;
-    status = ::send(socket_descriptor, buffer, buffer_size, 0);
+    status = ::sendto(socket_descriptor, buffer, buffer_size, 0, 
+      (struct sockaddr*)&address, sizeof(address));
+    //status = ::send(socket_descriptor, buffer, buffer_size, 0);
+
     if (status == -1) {
       if (errno != 0) {
         switch (errno) {
@@ -180,7 +182,10 @@ uint32_t Socket::sendData(byte* buffer, uint32_t buffer_size) {
           }
           else {
             errno = 0;
-            status = ::send(socket_descriptor, buffer, buffer_size, 0);
+            status = ::sendto(socket_descriptor, buffer, buffer_size, 0,
+              (struct sockaddr*)&address, sizeof(address));
+            //status = ::send(socket_descriptor, buffer, buffer_size, 0);
+
             if (errno != 0) {
               error_printf("Send data: %s\n", strerror(errno));
             }
@@ -215,7 +220,11 @@ uint32_t Socket::receiveData(byte* buffer, uint32_t max_size_to_read) {
 
   if (receiving_status == ReceivingStatus::CanReceive) {
     errno = 0;
-    status = recv(socket_descriptor, buffer, max_size_to_read, 0);
+    socklen_t address_len = sizeof(address);
+    status = recvfrom(socket_descriptor, buffer, max_size_to_read, 0,
+      (struct sockaddr*)&address, &address_len);
+    //status = recv(socket_descriptor, buffer, max_size_to_read, 0);
+
     if (status == -1) {
       if (errno != 0) {
         switch (errno) {
@@ -267,7 +276,11 @@ uint32_t Socket::receiveData(byte* buffer, uint32_t max_size_to_read) {
           }
           else {
             errno = 0;
-            status = recv(socket_descriptor, buffer, max_size_to_read, 0);
+            socklen_t address_len = sizeof(address);
+            status = recvfrom(socket_descriptor, buffer, max_size_to_read, 0,
+              (struct sockaddr*)&address, &address_len);
+            //status = recv(socket_descriptor, buffer, max_size_to_read, 0);
+
             if (errno != 0) {
               //error_printf("Receive data: %s\n", strerror(errno));
               if (errno == EINVAL) {
@@ -653,8 +666,12 @@ bool TCPListener::close() {
 
 
 // [UDPSocket]
-UDPSocket::UDPSocket(Socket::Type type) {
+UDPSocket::UDPSocket(Socket::Type _type) {
+  memset(&address, 0, sizeof(address));
+  address.sin_family = AF_INET;
+  socket_descriptor = socket(address.sin_family, SOCK_DGRAM, 0);
 
+  construct(_type);
 }
 
 UDPSocket::~UDPSocket() {
@@ -664,29 +681,68 @@ UDPSocket::~UDPSocket() {
 }
 
 uint32_t UDPSocket::sendData(byte* buffer, uint32_t buffer_size, const Socket::Peer& peer) {
-  if (peer.ready == true) {
+  // if (peer.ready == true) {
+  //   address.sin_addr.s_addr = peer.ip_address;
+  //   address.sin_port = peer.port;
+  //   return Socket::sendData(buffer, buffer_size);
+  // }
+  // else {
+  //   error_printf("UDPSocket::sendData(): peer not ready\n");
+  // }
 
-  }
-  else {
-    error_printf("UDPSocket::sendData(): peer not ready\n");
-  }
+  // return 0;
+
+  address.sin_family = AF_INET;
+  address.sin_addr.s_addr = inet_addr(peer.ip_address.c_str());
+  address.sin_port = htons(peer.port);
+  return Socket::sendData(buffer, buffer_size);
 }
 
 uint32_t UDPSocket::receiveData(byte* buffer, uint32_t max_size_to_read, const Socket::Peer& peer) {
-  if (peer.ready == true) {
+  // if (peer.ready == true) {
+  //   address.sin_addr.s_addr = peer.ip_address;
+  //   address.sin_port = peer.port;
+  //   return Socket::receiveData(buffer, max_size_to_read);
+  // }
+  // else {
+  //   error_printf("UDPSocket::receiveData(): peer not ready\n");
+  // }
 
-  }
-  else {
-    error_printf("UDPSocket::receiveData(): peer not ready\n");
-  }
+  // return 0;
+
+    address.sin_family = AF_INET;
+    address.sin_addr.s_addr = inet_addr(peer.ip_address.c_str());
+    address.sin_port = htons(peer.port);
+    return Socket::receiveData(buffer, max_size_to_read);
 }
 
 UDPSocket::UDPSocket() {
+  memset(&address, 0, sizeof(address));
+  address.sin_family = AF_INET;
+  socket_descriptor = socket(address.sin_family, SOCK_DGRAM, 0);
 
+  construct(Socket::Type::NonBlock);
 }
 
-void UDPSocket::construct(Socket::Type type) {
+void UDPSocket::construct(Socket::Type _type) {
+  type = _type;
 
+  closed = false;
+
+  receiving_status = ReceivingStatus::CanReceive;
+  sending_status = SendingStatus::CanSend;
+
+  int32_t true_int_value = 1;
+  socklen_t sizeofunsignedint = sizeof(uint32_t);
+  uint32_t max_recv_buffer_size = 0;
+  setsockopt(socket_descriptor, SOL_SOCKET, SO_REUSEADDR, (int32_t*)&true_int_value, sizeof(int32_t));  // CAREFUL: this violates TCP/IP protocol making it unlikely but possible for the next program that binds on that port to pick up packets intended for the original program
+  
+  // TODO: give the option to SO_NOSIGPIPE to be flagable
+  //setsockopt(socket_descriptor, SOL_SOCKET, SO_NOSIGPIPE, (int32_t*)&true_int_value, sizeof(int32_t));
+
+  if (type == Type::NonBlock) {
+    fcntl(socket_descriptor, F_SETFL, O_NONBLOCK);
+  }
 }
 
 void UDPSocket::handleError(ErrorFrom from, int32_t error) {

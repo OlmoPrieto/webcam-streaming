@@ -1,8 +1,10 @@
 #ifndef __SOCKETS_H__
 #define __SOCKETS_H__
 
-#include <vector>
 #include <cstdint>
+#include <functional>
+#include <string>
+#include <vector>
 
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -31,7 +33,23 @@ public:
     Sending
   };
 
-  struct Peer;
+  struct Peer {
+    Peer();
+    Peer(const std::string& ip, uint32_t port);
+    ~Peer();
+    
+    operator struct sockaddr*();
+    
+    static Peer LocalHost(uint32_t port = 14194);
+    static Peer Any(uint32_t port = 14194);
+
+    std::string ip_address;
+    uint32_t port;
+    bool ready;
+
+  private:
+    struct sockaddr_in address;
+  };
 
   Socket();
   virtual ~Socket();
@@ -119,6 +137,7 @@ public:
   UDPSocket(Socket::Type type);
   ~UDPSocket();
 
+  // TODO: method to broadcast
   uint32_t sendData(byte* buffer, uint32_t buffer_size, const Socket::Peer& peer);
   uint32_t receiveData(byte* buffer, uint32_t max_size_to_read, const Socket::Peer& peer);
 

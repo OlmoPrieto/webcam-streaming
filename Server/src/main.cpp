@@ -394,7 +394,7 @@ void NetworkTask() {
   }
 }
 
-int main() {
+int ____main() {
 	TCPListener listener(Socket::Type::NonBlock);
 	listener.bind(14194);
 	listener.listen();
@@ -435,6 +435,21 @@ int main() {
 	printf("Data sent successfuly\n");
 
 	return 0;
+}
+
+int main() {
+  UDPSocket socket(Socket::Type::NonBlock);
+
+  byte buffer[1000];
+  memset(buffer, 0, 1000);
+  buffer[1] = 14;
+
+  socket.bind(14194);
+  
+  printf("Sent %u bytes\n", 
+    socket.sendData(buffer, 1000, Socket::Peer::LocalHost()));
+
+  return 0;
 }
 
 int ___main() {
