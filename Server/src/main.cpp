@@ -24,6 +24,9 @@
 #include "chrono.h"
 #include "sockets.h"
 
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
+
 typedef uint8_t byte;
 
 enum class ProcessingState {
@@ -95,7 +98,7 @@ void InitializeVideoDevice(const char* device_path) {
 
   // struct v4l2_format format;
   g_format.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-  g_format.fmt.pix.pixelformat = V4L2_PIX_FMT_RGB24; // CAREFUL: OpenGL likes 32 bits, not 24
+  g_format.fmt.pix.pixelformat = V4L2_PIX_FMT_YUYV;
   g_format.fmt.pix.width = 640;
   g_format.fmt.pix.height = 480;
   g_format.fmt.pix.colorspace = V4L2_COLORSPACE_SRGB;
@@ -252,8 +255,8 @@ void ProcessImage(byte* src_image, unsigned int src_size,
   }
   c.stop();
 
-  //printf("Pixels that differ: %u\n", count);
-  //printf("Time to process image: %.2fms\n", c.timeAsMilliseconds());
+  printf("Pixels that differ: %u\n", count);
+  printf("Time to process image: %.2fms\n", c.timeAsMilliseconds());
 }
 
 void ProcessingTask() {
@@ -481,6 +484,74 @@ int ___main() {
   return true;
 }
 
+
+// @PRE: yuyv_buffer and rgb_buffer must have been allocated
+static void YUYVtoRGB(byte* yuyv_buffer, byte* rgb_buffer) {
+	// Convert YUYV image to RGB: https://stackoverflow.com/questions/9098881/convert-from-yuv-to-rgb-in-c-android-ndk
+
+	//unsigned char* rgb_image = new unsigned char[width * height * 3]; //width and height of the image to be converted
+	byte* rgb_image  = rgb_buffer;
+	byte* yuyv_image = yuyv_buffer;
+
+	int y;
+	int cr;
+	int cb;
+
+	double r;
+	double g;
+	double b;
+
+	for (int i = 0, j = 0; i < 640 * 480 * 3; i += 6, j += 4) {
+	  //first pixel
+	  y  = yuyv_image[j];
+	  cb = yuyv_image[j + 1];
+	  cr = yuyv_image[j + 3];
+
+	  r = y + (1.4065 * (cr - 128));
+	  g = y - (0.3455 * (cb - 128)) - (0.7169 * (cr - 128));
+	  b = y + (1.7790 * (cb - 128));
+
+	  //This prevents colour distortions in your rgb image
+	  if (r < 0) r = 0;
+	  else if (r > 255) r = 255;
+	  if (g < 0) g = 0;
+	  else if (g > 255) g = 255;
+	  if (b < 0) b = 0;
+	  else if (b > 255) b = 255;
+
+	  rgb_image[i]   	 = (byte)r;
+	  rgb_image[i + 1] = (byte)g;
+	  rgb_image[i + 2] = (byte)b;
+
+	  //second pixel
+	  y  = yuyv_image[j + 2];
+	  cb = yuyv_image[j + 1];
+	  cr = yuyv_image[j + 3];
+
+	  r = y + (1.4065 * (cr - 128));
+	  g = y - (0.3455 * (cb - 128)) - (0.7169 * (cr - 128));
+	  b = y + (1.7790 * (cb - 128));
+
+	  if (r < 0) r = 0;
+	  else if (r > 255) r = 255;
+	  if (g < 0) g = 0;
+	  else if (g > 255) g = 255;
+	  if (b < 0) b = 0;
+	  else if (b > 255) b = 255;
+
+	  rgb_image[i + 3] = (byte)r;
+	  rgb_image[i + 4] = (byte)g;
+	  rgb_image[i + 5] = (byte)b;
+	}
+}
+
+static void SaveImage(const char* path, byte* buffer, uint32_t length) {
+	byte* tmp_buffer = (byte*)malloc(640 * 480 * 3);
+	YUYVtoRGB(buffer, tmp_buffer);
+	stbi_write_png("/home/olmo/Desktop/image.png", 640, 480, 3, tmp_buffer, 0);
+	free(tmp_buffer);
+}
+
 int main(int argc, char** argv) {
   signal(SIGINT, InterruptSignalHandler);
 
@@ -526,7 +597,7 @@ int main(int argc, char** argv) {
   EnableVideoStreaming();
   #endif
 
-
+  int r = 0;
   /* MAIN LOOP */
   Chrono c;
   uint32_t index = 0;
@@ -560,11 +631,18 @@ int main(int argc, char** argv) {
       g_can_send_data = true;
     }
 
+    // r++;
+    // if (r > 25) {
+    // 	printf("Saving image...\n");
+    // 	SaveImage(nullptr, *g_read_ptr, g_bufferinfo.length);
+    // 	r = -100000;
+    // }
+
     c.stop();
     //printf("Frame time: %.2fms\n", c.timeAsMilliseconds());
   }
   /* \MAIN LOOP */
-
+  
   close(g_fd);
 
   network_thread.join();

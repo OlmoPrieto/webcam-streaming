@@ -130,6 +130,66 @@ static void KeyCallback(GLFWwindow* window, int key, int scancode, int action, i
   }
 }
 
+// @PRE: yuyv_buffer and rgb_buffer must have been allocated
+static void YUYVtoRGB(byte* yuyv_buffer, byte* rgb_buffer) {
+  // Convert YUYV image to RGB: https://stackoverflow.com/questions/9098881/convert-from-yuv-to-rgb-in-c-android-ndk
+
+  //unsigned char* rgb_image = new unsigned char[width * height * 3]; //width and height of the image to be converted
+  byte* rgb_image  = rgb_buffer;
+  byte* yuyv_image = yuyv_buffer;
+
+  int y;
+  int cr;
+  int cb;
+
+  double r;
+  double g;
+  double b;
+
+  for (int i = 0, j = 0; i < 640 * 480 * 3; i += 6, j += 4) {
+    //first pixel
+    y  = yuyv_image[j];
+    cb = yuyv_image[j + 1];
+    cr = yuyv_image[j + 3];
+
+    r = y + (1.4065 * (cr - 128));
+    g = y - (0.3455 * (cb - 128)) - (0.7169 * (cr - 128));
+    b = y + (1.7790 * (cb - 128));
+
+    //This prevents colour distortions in your rgb image
+    if (r < 0) r = 0;
+    else if (r > 255) r = 255;
+    if (g < 0) g = 0;
+    else if (g > 255) g = 255;
+    if (b < 0) b = 0;
+    else if (b > 255) b = 255;
+
+    rgb_image[i]     = (byte)r;
+    rgb_image[i + 1] = (byte)g;
+    rgb_image[i + 2] = (byte)b;
+
+    //second pixel
+    y  = yuyv_image[j + 2];
+    cb = yuyv_image[j + 1];
+    cr = yuyv_image[j + 3];
+
+    r = y + (1.4065 * (cr - 128));
+    g = y - (0.3455 * (cb - 128)) - (0.7169 * (cr - 128));
+    b = y + (1.7790 * (cb - 128));
+
+    if (r < 0) r = 0;
+    else if (r > 255) r = 255;
+    if (g < 0) g = 0;
+    else if (g > 255) g = 255;
+    if (b < 0) b = 0;
+    else if (b > 255) b = 255;
+
+    rgb_image[i + 3] = (byte)r;
+    rgb_image[i + 4] = (byte)g;
+    rgb_image[i + 5] = (byte)b;
+  }
+}
+
 static const char* vertex_shader_text = 
 "#version 330 core\n"
 "uniform mat4 MVP;\n"
@@ -372,6 +432,10 @@ void InitializeOpenGLStuff() {
 }
 
 void AddAlphaChannelData(byte** buffer, uint32_t size, uint32_t new_size) {
+  byte* tmp_buffer = (byte*)malloc(640 * 480 * 3);
+  YUYVtoRGB(*buffer, tmp_buffer);
+  *buffer = tmp_buffer;
+
   byte* aux_buffer = (byte*)malloc(new_size);
   memset(aux_buffer, 0, new_size);
 
@@ -394,6 +458,9 @@ void AddAlphaChannelData(byte** buffer, uint32_t size, uint32_t new_size) {
 
   // release old buffer
   free(ptr);
+
+  // TODO: temporary hack. Need to clean the memory up
+  //free(tmp_buffer);
 }
 
 void NetworkTask() {
@@ -430,8 +497,8 @@ void NetworkTask() {
         g_bytes_read = 0;
 
         if (g_can_receive_data == true) {
-          while (g_bytes_read < g_image_width * g_image_height * 3) {
-            bytes_read = g_socket.receiveData((*g_recv_data_ptr) + g_bytes_read, (g_image_width * g_image_height * 3) - g_bytes_read);
+          while (g_bytes_read < g_image_width * g_image_height * 2) {
+            bytes_read = g_socket.receiveData((*g_recv_data_ptr) + g_bytes_read, (g_image_width * g_image_height * 2) - g_bytes_read);
 
             g_bytes_read += bytes_read;
 
@@ -442,7 +509,7 @@ void NetworkTask() {
 
           printf("Received %u bytes\n", g_bytes_read);
           printf("Received image (frame %u)\n", g_frame_count.load());
-          AddAlphaChannelData(g_recv_data_ptr, g_image_width * g_image_height * 3, g_image_width * g_image_height * 4);
+          AddAlphaChannelData(g_recv_data_ptr, g_image_width * g_image_height * 2, g_image_width * g_image_height * 4);
 
           g_network_state = NetworkState::Connected;
 
@@ -500,6 +567,7 @@ int __main() {
 
   return 0;
 }
+
 
 int main() {
   signal(SIGINT, InterruptSignalHandler);
