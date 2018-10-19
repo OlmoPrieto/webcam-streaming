@@ -432,9 +432,13 @@ void InitializeOpenGLStuff() {
 }
 
 void AddAlphaChannelData(byte** buffer, uint32_t size, uint32_t new_size) {
+  // First, convert the image from YUYV to RGB
+  // Allocate RGB buffer (3 channels)
   byte* tmp_buffer = (byte*)malloc(640 * 480 * 3);
   YUYVtoRGB(*buffer, tmp_buffer);
-  *buffer = tmp_buffer;
+  //*buffer = tmp_buffer;
+  memcpy(*buffer, tmp_buffer, 640 * 480 * 3);
+  free(tmp_buffer);
 
   byte* aux_buffer = (byte*)malloc(new_size);
   memset(aux_buffer, 0, new_size);
@@ -447,7 +451,7 @@ void AddAlphaChannelData(byte** buffer, uint32_t size, uint32_t new_size) {
     *(other + 2) = *(ptr + 2);
     *(other + 3) = 255;
 
-    ptr += 3;
+    ptr   += 3;
     other += 4;
   }
   // store a ref to the old buffer
@@ -458,9 +462,6 @@ void AddAlphaChannelData(byte** buffer, uint32_t size, uint32_t new_size) {
 
   // release old buffer
   free(ptr);
-
-  // TODO: temporary hack. Need to clean the memory up
-  //free(tmp_buffer);
 }
 
 void NetworkTask() {
@@ -479,10 +480,11 @@ void NetworkTask() {
     switch (g_network_state) {
       case NetworkState::NotConnected: {
         while (!success && !g_program_should_finish) {
-          //success = g_socket.connect("81.202.4.30", 14194);
           success = g_socket.connect("127.0.0.1", 14194);
+        	//success = g_socket.connect("192.168.1.40", 14194);
         }
 
+        printf("Connected to the server!\n");
         g_network_state = NetworkState::Connected;
 
         break;

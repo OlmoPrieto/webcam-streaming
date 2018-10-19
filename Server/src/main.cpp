@@ -323,7 +323,8 @@ void NetworkTask() {
       g_chrono.stop();
       elapsed_time += g_chrono.timeAsMilliseconds();
       //printf("elapsed_time: %.2f\n", elapsed_time);
-      if (elapsed_time >= 330.3333f) {
+      //if (elapsed_time >= 330.3333f) {
+      if (elapsed_time >= 0.0f) {
         //printf("Can send data\n");
         elapsed_time = 0.0f;
         g_can_send_data = true;
