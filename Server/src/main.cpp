@@ -288,8 +288,6 @@ void ProcessingTask() {
           ProcessImage(*g_read_copy_ptr, g_format.fmt.pix.sizeimage, 
               *g_process_ptr, g_format.fmt.pix.sizeimage, nullptr, 0);
 
-          g_processing_state = ProcessingState::NotProcessing;
-
           break;
         }
       }
@@ -369,11 +367,14 @@ void NetworkTask() {
           // r++; g++; b++;
           // r %= 255; g %= 255; b %= 255;
 
+          if (socket->isConnected() == false) {
+            g_network_state = NetworkState::NoPeerConnected;
+            break;
+          }
+
           uint32_t bytes_sent = 0;
           g_bytes_sent = 0;
           if (g_can_send_data == true) {
-            g_network_state = NetworkState::PeerConnected;
-
             while (g_bytes_sent < g_format.fmt.pix.sizeimage) {
               bytes_sent = socket->sendData((*g_send_ptr) + g_bytes_sent, g_format.fmt.pix.sizeimage - g_bytes_sent);
 
@@ -383,7 +384,7 @@ void NetworkTask() {
                 break;
               }
             }
-
+            
             printf("Sent %u bytes\n", g_bytes_sent);
 
             // The order is important
@@ -424,7 +425,7 @@ static void YUYVtoRGB(byte* yuyv_buffer, byte* rgb_buffer) {
 	  g = y - (0.3455 * (cb - 128)) - (0.7169 * (cr - 128));
 	  b = y + (1.7790 * (cb - 128));
 
-	  //This prevents colour distortions in your rgb image
+	  //This prevents color distortions in the rgb image
 	  if (r < 0) r = 0;
 	  else if (r > 255) r = 255;
 	  if (g < 0) g = 0;

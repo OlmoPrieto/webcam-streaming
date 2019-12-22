@@ -16,6 +16,9 @@
 #endif
 #include <GLFW/include/glfw3.h>
 
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
+
 typedef unsigned char byte;
 
 enum class NetworkState {
@@ -146,7 +149,7 @@ static void YUYVtoRGB(byte* yuyv_buffer, byte* rgb_buffer) {
   double g;
   double b;
 
-  for (int i = 0, j = 0; i < 640 * 480 * 3; i += 6, j += 4) {
+  for (int i = 0, j = 0; i < g_image_width * g_image_height * 3; i += 6, j += 4) {
     //first pixel
     y  = yuyv_image[j];
     cb = yuyv_image[j + 1];
@@ -188,6 +191,17 @@ static void YUYVtoRGB(byte* yuyv_buffer, byte* rgb_buffer) {
     rgb_image[i + 4] = (byte)g;
     rgb_image[i + 5] = (byte)b;
   }
+}
+
+static void SaveImageYUYVToRGB(const char* path, byte* buffer, uint32_t width, uint32_t height, uint32_t color_depth) {
+  byte* tmp_buffer = (byte*)malloc(width * height * color_depth);
+  YUYVtoRGB(buffer, tmp_buffer);
+  stbi_write_png("/home/olmo/Desktop/image.png", width, height, color_depth, tmp_buffer, 0);
+  free(tmp_buffer);
+}
+
+static void SaveImageRGB(const char* path, byte* buffer, uint32_t width, uint32_t height, uint32_t color_depth) {
+  stbi_write_png("/home/olmo/Desktop/image.png", width, height, color_depth, buffer, 0);
 }
 
 static const char* vertex_shader_text = 
@@ -293,12 +307,12 @@ void InitializeOpenGLStuff() {
     float x, y, z;
   };
   Vertex vertices[6] = {
-    {  0.9f,  0.9f, 0.0f },
-    { -0.9f,  0.9f, 0.0f },
-    { -0.9f, -0.9f, 0.0f },
     { -0.9f, -0.9f, 0.0f },
     {  0.9f, -0.9f, 0.0f },
-    {  0.9f,  0.9f, 0.0f }
+    {  0.9f,  0.9f, 0.0f },
+    {  0.9f,  0.9f, 0.0f },
+    { -0.9f,  0.9f, 0.0f },
+    { -0.9f, -0.9f, 0.0f }
   };
   glGenBuffers(1, &g_vertex_buffer_id);
   glBindBuffer(GL_ARRAY_BUFFER, g_vertex_buffer_id);
@@ -365,10 +379,10 @@ void InitializeOpenGLStuff() {
   };
   UV uvs[6] = {
     {  1.0f,  1.0f },
-    { -1.0f,  1.0f },
-    { -1.0f, -1.0f },
-    { -1.0f, -1.0f },
-    {  1.0f, -1.0f },
+    {  0.0f,  1.0f },
+    {  0.0f,  0.0f },
+    {  0.0f,  0.0f },
+    {  1.0f,  0.0f },
     {  1.0f,  1.0f }
   };
   glGenBuffers(1, &g_uvs_id);
@@ -434,34 +448,32 @@ void InitializeOpenGLStuff() {
 void AddAlphaChannelData(byte** buffer, uint32_t size, uint32_t new_size) {
   // First, convert the image from YUYV to RGB
   // Allocate RGB buffer (3 channels)
-  byte* tmp_buffer = (byte*)malloc(640 * 480 * 3);
+  byte* tmp_buffer = (byte*)malloc(g_image_width * g_image_height * 3);
   YUYVtoRGB(*buffer, tmp_buffer);
-  //*buffer = tmp_buffer;
-  memcpy(*buffer, tmp_buffer, 640 * 480 * 3);
+  memcpy(*buffer, tmp_buffer, g_image_width * g_image_height * 3);
   free(tmp_buffer);
 
   byte* aux_buffer = (byte*)malloc(new_size);
   memset(aux_buffer, 0, new_size);
 
-  byte* ptr   = *buffer;
-  byte* other = aux_buffer;
-  for (uint32_t i = 0; i < size; i += 3) {
-    *(other + 0) = *(ptr + 0);
-    *(other + 1) = *(ptr + 1);
-    *(other + 2) = *(ptr + 2);
-    *(other + 3) = 255;
+  byte* rgb   = *buffer;
+  byte* rgba  = aux_buffer;
+  for (uint32_t i = 0; i < g_image_width * g_image_height; ++i) {
+    *(rgba + 0) = *(rgb + 0);
+    *(rgba + 1) = *(rgb + 1);
+    *(rgba + 2) = *(rgb + 2);
+    *(rgba + 3) = 255;
 
-    ptr   += 3;
-    other += 4;
+    rgb  += 3;
+    rgba += 4;
   }
-  // store a ref to the old buffer
-  ptr = *buffer;
 
-  // return a pointer to the new (resized) buffer
-  *buffer = aux_buffer;
+  memcpy(*buffer, aux_buffer, new_size);
+
+  //SaveImageRGB(nullptr, *buffer, g_image_width, g_image_height, 4);
 
   // release old buffer
-  free(ptr);
+  free(aux_buffer);
 }
 
 void NetworkTask() {
@@ -495,6 +507,11 @@ void NetworkTask() {
         break;
       }
       case NetworkState::Receiving: {
+        if (g_socket.isConnected() == false) {
+          g_network_state = NetworkState::NotConnected;
+          break;
+        }
+
         uint32_t bytes_read = 0;
         g_bytes_read = 0;
 
@@ -512,8 +529,6 @@ void NetworkTask() {
           printf("Received %u bytes\n", g_bytes_read);
           printf("Received image (frame %u)\n", g_frame_count.load());
           AddAlphaChannelData(g_recv_data_ptr, g_image_width * g_image_height * 2, g_image_width * g_image_height * 4);
-
-          g_network_state = NetworkState::Connected;
 
           // The order is important
           g_can_receive_data = false;
@@ -538,12 +553,12 @@ int main() {
 
   //free(g_draw_buffer);
   //g_draw_buffer = (byte*)malloc(g_image_width * g_image_height * 4);
-  memset(g_draw_buffer, 0, g_image_width * g_image_height * 4);
-  byte* ptr = g_draw_buffer;
-  for (uint32_t i = 0; i < g_image_width * g_image_height * 4; i += 4) {
+  //memset(g_draw_buffer, 0, g_image_width * g_image_height * 4);
+  /*byte* ptr = g_draw_buffer;
+  for (uint32_t i = 0; i < g_image_width * g_image_height; ++i) {
     *(ptr + 3) = 255;
     ptr += 4;
-  }
+  }*/
   g_draw_buffer_ptr = &g_draw_buffer;
 
   g_frame_count = 0;
