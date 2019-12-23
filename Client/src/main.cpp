@@ -53,7 +53,7 @@ byte* g_recv_data_buffer  = nullptr;
 byte** g_draw_buffer_ptr  = nullptr;
 byte* g_draw_buffer       = nullptr;
 
-TCPSocket g_socket(Socket::Type::NonBlock);
+TCPSocket g_socket(Socket::Type::Block);
 NetworkState g_network_state = NetworkState::NotConnected;
 std::atomic<bool> g_can_sync_network;
 std::atomic<bool> g_can_receive_data;
@@ -492,8 +492,10 @@ void NetworkTask() {
     switch (g_network_state) {
       case NetworkState::NotConnected: {
         while (!success && !g_program_should_finish) {
-          success = g_socket.connect("127.0.0.1", 14194);
-        	//success = g_socket.connect("192.168.1.40", 14194);
+          //success = g_socket.connect("127.0.0.1", 14194);
+        	//success = g_socket.connect("192.168.1.94", 14194);
+          success = g_socket.connect("85.61.83.136", 21775);
+          printf("Trying to connect...\n");
         }
 
         printf("Connected to the server!\n");
@@ -516,6 +518,8 @@ void NetworkTask() {
         g_bytes_read = 0;
 
         if (g_can_receive_data == true) {
+          Chrono receive_chrono;
+          receive_chrono.start();
           while (g_bytes_read < g_image_width * g_image_height * 2) {
             bytes_read = g_socket.receiveData((*g_recv_data_ptr) + g_bytes_read, (g_image_width * g_image_height * 2) - g_bytes_read);
 
@@ -525,8 +529,9 @@ void NetworkTask() {
               break;
             }
           }
+          receive_chrono.stop();
 
-          printf("Received %u bytes\n", g_bytes_read);
+          printf("Received %u bytes in %.2fms\n", g_bytes_read, receive_chrono.timeAsMilliseconds());
           printf("Received image (frame %u)\n", g_frame_count.load());
           AddAlphaChannelData(g_recv_data_ptr, g_image_width * g_image_height * 2, g_image_width * g_image_height * 4);
 
