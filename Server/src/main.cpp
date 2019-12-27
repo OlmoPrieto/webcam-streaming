@@ -233,7 +233,7 @@ void GrabCameraFrame(byte** target_buffer) {
     exit(1);
   }
   c.stop();
-  printf("Time to get frame: %.2fms\n", c.timeAsMilliseconds());
+  //printf("Time to get frame: %.2fms\n", c.timeAsMilliseconds());
 #endif
 }
 
@@ -300,7 +300,7 @@ void ProcessingTask() {
 
 
 void NetworkTask() {
-  TCPListener listener(Socket::Type::NonBlock, 128);
+  TCPListener listener(Socket::Type::Block, 128);
   listener.bind(14194);
   listener.listen();
 
@@ -315,8 +315,9 @@ void NetworkTask() {
 
   bool success = false;
   while (!g_program_should_finish) {
-    if (g_can_start_network == true) {
-      g_can_start_network = false;
+    //if (g_can_start_network == true) 
+    {
+      //g_can_start_network = false;
 
       g_chrono.stop();
       elapsed_time += g_chrono.timeAsMilliseconds();
@@ -375,21 +376,27 @@ void NetworkTask() {
           uint32_t bytes_sent = 0;
           g_bytes_sent = 0;
           if (g_can_send_data == true) {
+            Chrono send_chrono;
+            send_chrono.start();
             while (g_bytes_sent < g_format.fmt.pix.sizeimage) {
               bytes_sent = socket->sendData((*g_send_ptr) + g_bytes_sent, g_format.fmt.pix.sizeimage - g_bytes_sent);
-
+              
               g_bytes_sent += bytes_sent;
 
               if (g_program_should_finish == true) {
                 break;
               }
             }
+            send_chrono.stop();
             
-            printf("Sent %u bytes\n", g_bytes_sent);
+            printf("Sent %u bytes in %.2fms\n", g_bytes_sent, send_chrono.timeAsMilliseconds());
 
             // The order is important
             g_can_send_data = false;
             g_can_sync_network = true;
+          }
+          else {
+            printf("Can't send data\n");
           }
 
           break;
@@ -468,7 +475,7 @@ static void SaveImage(const char* path, byte* buffer, uint32_t length) {
 
 int main(int argc, char** argv) {
   signal(SIGINT, InterruptSignalHandler);
-
+  printf("Port translated: %hi\n", htons(14194));
   g_can_sync_network = false;
   g_can_sync_processing = false;
   g_can_process_data = true;
