@@ -437,6 +437,13 @@ bool TCPSocket::connect(const Peer& peer) {
 bool TCPSocket::isConnected() const {
   return connection_status == TCPSocket::ConnectionStatus::Connected;
 }
+
+void TCPSocket::setNaglesAlgorithmEnabled(bool status_) {
+  int status = (int)status;
+  if (setsockopt(socket_descriptor, IPPROTO_TCP, TCP_NODELAY, &status, sizeof(status))) {
+    printf("Error setting Nagle's algorithm status to %d\n", status);
+  }
+}
   
 /*private*/TCPSocket::TCPSocket(Type type, uint32_t descriptor) {
   socket_descriptor = descriptor;
@@ -626,6 +633,13 @@ bool TCPListener::close() {
   closed = success;
 
   return success;
+}
+
+void TCPListener::setNaglesAlgorithmEnabled(bool status_) {
+  int status = (int)status;
+  if (setsockopt(socket_descriptor, IPPROTO_TCP, TCP_NODELAY, &status, sizeof(status))) {
+    printf("Error setting Nagle's algorithm status to %d\n", status);
+  }
 }
 
 /*private*/TCPListener::TCPListener() {

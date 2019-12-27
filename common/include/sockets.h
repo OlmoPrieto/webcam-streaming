@@ -94,6 +94,8 @@ public:
   bool connect(const Peer& peer);
   bool isConnected() const;
 
+  void setNaglesAlgorithmEnabled(bool status);
+
 private:
   friend class TCPListener;
   
@@ -121,6 +123,7 @@ public:
   bool listen();
   TCPSocket* accept();
   bool close();
+  void setNaglesAlgorithmEnabled(bool status);
 
 private:
   TCPListener();
