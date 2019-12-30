@@ -479,6 +479,8 @@ void AddAlphaChannelData(byte** buffer, uint32_t size, uint32_t new_size) {
 void NetworkTask() {
   printf("Initializing network...\n");
 
+  //g_socket.setNaglesAlgorithmEnabled(true);
+
   g_recv_data_buffer = (byte*)malloc(g_image_width * g_image_height * 4);
   memset(g_recv_data_buffer, 0, g_image_width * g_image_height * 4);
   g_recv_data_ptr = &g_recv_data_buffer;
@@ -524,6 +526,7 @@ void NetworkTask() {
             bytes_read = g_socket.receiveData((*g_recv_data_ptr) + g_bytes_read, (g_image_width * g_image_height * 2) - g_bytes_read);
 
             g_bytes_read += bytes_read;
+            printf("Received %u bytes\n", bytes_read);
 
             if (g_program_should_finish == true) {
               break;
@@ -538,6 +541,9 @@ void NetworkTask() {
           // The order is important
           g_can_receive_data = false;
           g_can_sync_network = true;
+        }
+        else {
+          //printf("Can't receive data\n");
         }
 
         break;
@@ -592,15 +598,6 @@ int main() {
       else {
         g_draw_buffer_ptr = &g_draw_buffer;
         g_recv_data_ptr   = &g_recv_data_buffer;
-      }
-
-      while (g_can_receive_data == true) {
-        // Spin lock
-        // Because there are no mutexes, g_can_receive_data
-        // can still be true in NetworkTask(),
-        // so wait here to be false and don't mess things up
-
-        // fuck, seems like this never happens
       }
 
       g_can_sync_network = false;
