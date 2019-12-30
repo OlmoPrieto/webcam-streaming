@@ -57,6 +57,7 @@ std::atomic<bool> g_can_process_data;
 std::atomic<bool> g_can_sync_network;
 std::atomic<bool> g_can_start_processing;
 std::atomic<bool> g_can_start_network;
+std::atomic<bool> g_can_grab_image_to_send;
 
 byte** g_read_ptr      = nullptr;
 byte** g_read_copy_ptr = nullptr;
@@ -326,7 +327,7 @@ void NetworkTask() {
       if (elapsed_time >= 0.0f) {
         //printf("Can send data\n");
         elapsed_time = 0.0f;
-        g_can_send_data = true;
+        //g_can_send_data = true;
       }
       g_chrono.start();
 
@@ -334,6 +335,7 @@ void NetworkTask() {
         case NetworkState::NoPeerConnected: {
           while (!socket && !g_program_should_finish) {
             socket = listener.accept();
+            socket->setNaglesAlgorithmEnabled(true);
           }
 
           printf("Peer connected!\n");
@@ -375,12 +377,12 @@ void NetworkTask() {
 
           uint32_t bytes_sent = 0;
           g_bytes_sent = 0;
-          if (g_can_send_data == true) {
+          if (g_can_send_data == true && g_can_grab_image_to_send == true) {
             Chrono send_chrono;
             send_chrono.start();
             while (g_bytes_sent < g_format.fmt.pix.sizeimage) {
               bytes_sent = socket->sendData((*g_send_ptr) + g_bytes_sent, g_format.fmt.pix.sizeimage - g_bytes_sent);
-              
+              printf("Sent %u bytes in a single send\n", bytes_sent);
               g_bytes_sent += bytes_sent;
 
               if (g_program_should_finish == true) {
@@ -391,12 +393,14 @@ void NetworkTask() {
             
             printf("Sent %u bytes in %.2fms\n", g_bytes_sent, send_chrono.timeAsMilliseconds());
 
+            g_can_grab_image_to_send = false;
+
             // The order is important
             g_can_send_data = false;
             g_can_sync_network = true;
           }
           else {
-            printf("Can't send data\n");
+            //printf("Can't send data\n");
           }
 
           break;
@@ -480,6 +484,7 @@ int main(int argc, char** argv) {
   g_can_sync_processing = false;
   g_can_process_data = true;
   g_can_send_data = true;
+  g_can_grab_image_to_send = false;
   
   #if defined(__PLATFORM_MACOSX__) || defined(__PLATFORM_WINDOWS__)
   // No video streaming
@@ -524,24 +529,26 @@ int main(int argc, char** argv) {
   uint32_t index = 0;
   while (g_program_should_finish == false) {
     c.start();
-
-    memcpy(*g_read_copy_ptr, *g_read_ptr, g_format.fmt.pix.sizeimage);
     g_can_start_processing = true;
     g_can_read_data_buffer = true;
     g_can_start_network = true;
 
-    GrabCameraFrame(g_read_ptr);
+    if (g_can_grab_image_to_send == false) {
+      GrabCameraFrame(g_read_ptr);
+      memcpy(*g_read_copy_ptr, *g_read_ptr, g_format.fmt.pix.sizeimage);
+      g_can_grab_image_to_send = true;
+    }
 
     // sync point
     if (g_can_sync_processing == true && g_can_sync_network == true) {
       printf("Swapping buffers...\n");
 
-      g_read_ptr      = &buffers[(index) % 3];
+      g_read_ptr      = &buffers[(index + 0) % 3];
       g_read_copy_ptr = &buffers[(index + 1) % 3];
       g_process_ptr   = &buffers[(index + 2) % 3];
       g_send_ptr      = &buffers[(index + 3) % 3];
       ++index;
-      if (index > 1000000) {
+      if (index > 1000000) {  // TODO: should be a multiple of 4
         // to avoid overflows in long executions
         index = 0;
       }

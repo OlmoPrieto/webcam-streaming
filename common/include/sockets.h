@@ -95,6 +95,7 @@ public:
   bool isConnected() const;
 
   void setNaglesAlgorithmEnabled(bool status);
+  bool hasDataToRead();
 
 private:
   friend class TCPListener;

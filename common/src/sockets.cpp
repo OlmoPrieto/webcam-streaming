@@ -172,7 +172,7 @@ uint32_t Socket::sendData(byte* buffer, uint32_t buffer_size) {
 
     status = select(socket_descriptor + 1, nullptr, &sock_des, nullptr, &timeout); // CAREFUL: test this
     if (status >= 0) {
-      if (FD_ISSET(socket_descriptor, &sock_des) > 0) {
+      if (FD_ISSET(socket_descriptor, &sock_des) > 0) { 
         int error_state = 0;
         socklen_t sizeofint = sizeof(int32_t);
         int result = getsockopt(socket_descriptor, SOL_SOCKET, SO_ERROR, &error_state, &sizeofint);
@@ -207,7 +207,7 @@ uint32_t Socket::sendData(byte* buffer, uint32_t buffer_size) {
       }
     }
     else {
-      printf("Receive data select(): %s\n", strerror(errno));
+      printf("Send data select(): %s\n", strerror(errno));
     }
   }
 
@@ -443,6 +443,48 @@ void TCPSocket::setNaglesAlgorithmEnabled(bool status_) {
   if (setsockopt(socket_descriptor, IPPROTO_TCP, TCP_NODELAY, &status, sizeof(status))) {
     printf("Error setting Nagle's algorithm status to %d\n", status);
   }
+}
+
+bool TCPSocket::hasDataToRead() {
+  uint32_t bytes_read = 0;
+  int32_t status = 0;
+  fd_set sock_des;
+  memset(&sock_des, 0, sizeof(sock_des));
+  FD_ZERO(&sock_des);
+  FD_SET(socket_descriptor, &sock_des);
+
+  struct timeval timeout;
+  memset(&timeout, 0, sizeof(timeout));
+  //timeout.tv_usec = 1;
+  errno = 0;
+  status = select(socket_descriptor + 1, &sock_des, nullptr, nullptr, &timeout);  // CAREFUL: need to ask for fds than can be WRITTEN, not READABLE
+  if (status >= 0) {
+    if (FD_ISSET(socket_descriptor, &sock_des) > 0) {
+      int32_t error_state = 0;
+      socklen_t sizeofint = sizeof(int32_t);
+      errno = 0;
+      int32_t result = getsockopt(socket_descriptor, SOL_SOCKET, SO_ERROR, &error_state, &sizeofint);
+      if (result == 0) {
+        if (error_state != 0) {
+          error_printf("Query error value: %s\n", strerror(error_state));
+        }
+        else {
+          return true;  // !!!!!!!!!!!
+        }
+      }
+      else if (errno != 0) {
+        error_printf("getsockopt: %s\n", strerror(errno));
+      }
+    }
+    else {
+      error_printf("Socket not ready to receive\n");
+    }
+  }
+  else {
+    printf("Has Data To Read select(): %s\n", strerror(errno));
+  }
+
+  return false;
 }
   
 /*private*/TCPSocket::TCPSocket(Type type, uint32_t descriptor) {
